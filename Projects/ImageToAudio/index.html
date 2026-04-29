@@ -33,8 +33,8 @@
       min-height: 100%;
       margin: 0;
       background:
-        radial-gradient(circle at 18% 8%, rgba(77, 232, 255, 0.16), transparent 32rem),
-        radial-gradient(circle at 86% 14%, rgba(255, 79, 216, 0.13), transparent 31rem),
+        radial-gradient(circle at 18% 8%, rgba(77, 232, 255, 0.07), transparent 32rem),
+        radial-gradient(circle at 86% 14%, rgba(255, 79, 216, 0.06), transparent 31rem),
         linear-gradient(135deg, #070914 0%, #0c1022 45%, #111426 100%);
       color: var(--text);
     }
@@ -95,9 +95,7 @@
       letter-spacing: 0;
       text-transform: uppercase;
       color: #ffffff;
-      text-shadow:
-        0 0 24px rgba(77, 232, 255, 0.36),
-        0 0 50px rgba(255, 79, 216, 0.18);
+      text-shadow: none;
     }
 
     .subtitle {
@@ -116,7 +114,7 @@
       border-radius: 999px;
       background: rgba(16, 22, 42, 0.62);
       color: var(--muted);
-      box-shadow: 0 0 28px rgba(77, 232, 255, 0.09);
+      box-shadow: none;
     }
 
     .back-link {
@@ -146,7 +144,7 @@
       height: 9px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 18px var(--green);
+      box-shadow: none;
     }
 
     .layout {
@@ -218,7 +216,7 @@
 
     .upload-zone.dragging {
       border-color: var(--pink);
-      box-shadow: 0 0 34px rgba(255, 79, 216, 0.22);
+      box-shadow: none;
       transform: translateY(-1px);
     }
 
@@ -243,7 +241,7 @@
       background: rgba(77, 232, 255, 0.1);
       color: var(--cyan);
       font-size: 1.1rem;
-      box-shadow: 0 0 24px rgba(77, 232, 255, 0.18);
+      box-shadow: none;
     }
 
     .upload-text {
@@ -297,7 +295,7 @@
     .btn-primary {
       color: #061018;
       background: linear-gradient(135deg, var(--cyan), var(--green));
-      box-shadow: 0 0 24px rgba(77, 232, 255, 0.22);
+      box-shadow: none;
     }
 
     .btn-primary:hover:not(:disabled) {
@@ -307,7 +305,7 @@
     .btn-accent {
       background: linear-gradient(135deg, rgba(154, 104, 255, 0.95), rgba(255, 79, 216, 0.95));
       color: #ffffff;
-      box-shadow: 0 0 24px rgba(255, 79, 216, 0.16);
+      box-shadow: none;
     }
 
     .btn-quiet {
@@ -402,7 +400,7 @@
     .preset-btn:hover {
       background: linear-gradient(135deg, rgba(77, 232, 255, 0.22), rgba(255, 79, 216, 0.18));
       color: #ffffff;
-      box-shadow: 0 0 22px rgba(77, 232, 255, 0.13);
+      box-shadow: none;
     }
 
     .field-head {
@@ -520,8 +518,7 @@
       border-radius: var(--radius);
       background: #030611;
       box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-        0 0 45px rgba(77, 232, 255, 0.08);
+        inset 0 0 0 1px rgba(255, 255, 255, 0.06);
     }
 
     .canvas-help {
@@ -670,30 +667,6 @@
       color: #ffe8b6;
       font-size: 0.76rem;
       line-height: 1.4;
-    }
-
-    .edu-panel {
-      display: none;
-      margin-top: 8px;
-      padding: 8px;
-      border: 1px solid rgba(77, 232, 255, 0.22);
-      border-radius: var(--radius);
-      background: rgba(77, 232, 255, 0.07);
-      color: #cdefff;
-      font-size: 0.74rem;
-      line-height: 1.45;
-    }
-
-    .edu-panel.visible {
-      display: block;
-    }
-
-    .edu-panel p {
-      margin: 0 0 8px;
-    }
-
-    .edu-panel p:last-child {
-      margin-bottom: 0;
     }
 
     .mobile-dock {
@@ -960,14 +933,9 @@
               <span>Mute</span>
               <input id="muteToggle" type="checkbox">
             </label>
-            <label class="switch" for="eduToggle">
-              <span>Explain</span>
-              <input id="eduToggle" type="checkbox">
-            </label>
           </div>
 
-          <button class="btn btn-accent btn-wide" id="exportBtn" type="button" disabled>Export Snapshot PNG</button>
-          <button class="btn btn-quiet btn-wide" id="recordBtn" type="button" disabled>Record 8s Visual WebM</button>
+          <button class="btn btn-accent btn-wide" id="recordBtn" type="button" disabled>Record 8s Audio</button>
         </div>
       </aside>
 
@@ -1062,10 +1030,6 @@
               </div>
             </div>
             <div class="audio-note" id="audioNote">Audio starts after Play. If your browser blocks Web Audio, the visual scan still works.</div>
-            <div class="edu-panel" id="eduPanel">
-              <p>Brightness sets pitch. Red changes harmonics, green moves the filter, and blue shifts stereo/modulation.</p>
-              <p>Contrast and edges add accents. Saturation makes the tone richer. The limiter keeps the output controlled.</p>
-            </div>
           </div>
         </div>
       </aside>
@@ -1095,7 +1059,6 @@
         playBtn: document.getElementById("playBtn"),
         mobilePlayBtn: document.getElementById("mobilePlayBtn"),
         stopBtn: document.getElementById("stopBtn"),
-        exportBtn: document.getElementById("exportBtn"),
         recordBtn: document.getElementById("recordBtn"),
         speedRange: document.getElementById("speedRange"),
         pitchRange: document.getElementById("pitchRange"),
@@ -1105,7 +1068,6 @@
         loopToggle: document.getElementById("loopToggle"),
         invertToggle: document.getElementById("invertToggle"),
         muteToggle: document.getElementById("muteToggle"),
-        eduToggle: document.getElementById("eduToggle"),
         presetValue: document.getElementById("presetValue"),
         speedValue: document.getElementById("speedValue"),
         pitchValue: document.getElementById("pitchValue"),
@@ -1135,7 +1097,6 @@
         currentMode: document.getElementById("currentMode"),
         audioState: document.getElementById("audioState"),
         audioNote: document.getElementById("audioNote"),
-        eduPanel: document.getElementById("eduPanel"),
         statusText: document.getElementById("statusText"),
         statusDot: document.getElementById("statusDot"),
         energyReadout: document.getElementById("energyReadout"),
@@ -1150,7 +1111,7 @@
       const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
 
       const audioSupported = Boolean(window.AudioContext || window.webkitAudioContext);
-      const recordingSupported = Boolean(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+      const recordingSupported = Boolean(window.MediaRecorder);
       const maxWidth = 760;
       const maxHeight = 430;
       const verticalBands = 8;
@@ -1183,8 +1144,7 @@
         hasImage: false,
         recorder: null,
         recordChunks: [],
-        recordTimer: 0,
-        recordStream: null
+        recordTimer: 0
       };
 
       function clamp(value, min, max) {
@@ -1278,10 +1238,9 @@
       function setImageReady(ready) {
         els.playBtn.disabled = !ready;
         if (els.mobilePlayBtn) els.mobilePlayBtn.disabled = !ready;
-        els.exportBtn.disabled = !ready;
         els.recordBtn.disabled = !ready || !recordingSupported;
         if (!recordingSupported) {
-          els.recordBtn.textContent = "Recording Unavailable";
+          els.recordBtn.textContent = "Audio Recording Unavailable";
         }
       }
 
@@ -1306,6 +1265,74 @@
         drawEmptyPreview();
         resetMetrics();
         setImageReady(false);
+      }
+
+      function createSampleImage() {
+        const w = 760;
+        const h = 430;
+        sourceCanvas.width = w;
+        sourceCanvas.height = h;
+
+        const base = sourceCtx.createLinearGradient(0, 0, w, h);
+        base.addColorStop(0, "#10214d");
+        base.addColorStop(0.22, "#1d8ad8");
+        base.addColorStop(0.42, "#47d68f");
+        base.addColorStop(0.62, "#f1d64d");
+        base.addColorStop(0.78, "#f06a65");
+        base.addColorStop(1, "#7b3dd6");
+        sourceCtx.fillStyle = base;
+        sourceCtx.fillRect(0, 0, w, h);
+
+        const vertical = sourceCtx.createLinearGradient(0, 0, 0, h);
+        vertical.addColorStop(0, "rgba(255,255,255,0.28)");
+        vertical.addColorStop(0.46, "rgba(255,255,255,0.02)");
+        vertical.addColorStop(1, "rgba(0,0,0,0.34)");
+        sourceCtx.fillStyle = vertical;
+        sourceCtx.fillRect(0, 0, w, h);
+
+        for (let x = 0; x < w; x += 18) {
+          const wave = Math.sin(x * 0.035) * 48 + Math.sin(x * 0.011) * 70;
+          const y = h * 0.52 + wave;
+          const stripe = sourceCtx.createLinearGradient(x, 0, x + 18, h);
+          stripe.addColorStop(0, `hsla(${(x / w) * 280 + 170}, 88%, 62%, 0.18)`);
+          stripe.addColorStop(1, "rgba(255,255,255,0)");
+          sourceCtx.fillStyle = stripe;
+          sourceCtx.fillRect(x, Math.max(0, y - 90), 12, 180);
+        }
+
+        for (let i = 0; i < 9; i++) {
+          const cx = (i + 0.5) * (w / 9);
+          const cy = h * (0.22 + (i % 3) * 0.22);
+          const radius = 58 + (i % 4) * 18;
+          const hue = 195 + i * 22;
+          const orb = sourceCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+          orb.addColorStop(0, `hsla(${hue}, 90%, 78%, 0.52)`);
+          orb.addColorStop(0.55, `hsla(${hue + 35}, 90%, 58%, 0.16)`);
+          orb.addColorStop(1, "rgba(0,0,0,0)");
+          sourceCtx.fillStyle = orb;
+          sourceCtx.beginPath();
+          sourceCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+          sourceCtx.fill();
+        }
+
+        sourceCtx.save();
+        sourceCtx.globalAlpha = 0.23;
+        sourceCtx.strokeStyle = "#ffffff";
+        sourceCtx.lineWidth = 1;
+        for (let y = 30; y < h; y += 34) {
+          sourceCtx.beginPath();
+          for (let x = 0; x <= w; x += 10) {
+            const waveY = y + Math.sin(x * 0.02 + y * 0.04) * 8;
+            if (x === 0) sourceCtx.moveTo(x, waveY);
+            else sourceCtx.lineTo(x, waveY);
+          }
+          sourceCtx.stroke();
+        }
+        sourceCtx.restore();
+
+        finalizeSource("Generated sample gradient", `${w} x ${h} px`);
+        els.imageHint.textContent = "Generated sample image. Upload your own image anytime.";
+        els.sourceBadge.textContent = "SAMPLE";
       }
 
       function drawImageCover(targetCtx, image, x, y, w, h) {
@@ -1386,6 +1413,9 @@
           let saturation = 0;
           let edge = 0;
           const bands = new Array(verticalBands).fill(0);
+          const bandR = new Array(verticalBands).fill(0);
+          const bandG = new Array(verticalBands).fill(0);
+          const bandB = new Array(verticalBands).fill(0);
           const bandCounts = new Array(verticalBands).fill(0);
 
           for (let y = 0; y < height; y++) {
@@ -1413,6 +1443,9 @@
             saturation += sat * 255;
             edge += Math.abs(lum - leftLum) * 0.68 + Math.abs(lum - upLum) * 0.32;
             bands[band] += lum;
+            bandR[band] += pr;
+            bandG[band] += pg;
+            bandB[band] += pb;
             bandCounts[band]++;
           }
 
@@ -1427,7 +1460,15 @@
             contrast: Math.sqrt(variance),
             saturation: saturation / count,
             edge: edge / count,
-            bands: bands.map((v, i) => v / Math.max(1, bandCounts[i]))
+            bands: bands.map((v, i) => v / Math.max(1, bandCounts[i])),
+            bandColors: bands.map((_, i) => {
+              const bandCount = Math.max(1, bandCounts[i]);
+              return {
+                r: bandR[i] / bandCount,
+                g: bandG[i] / bandCount,
+                b: bandB[i] / bandCount
+              };
+            })
           };
         }
         return stats;
@@ -1474,6 +1515,13 @@
         return "Blue";
       }
 
+      function bandColorCss(stats, index, alpha = 1) {
+        const color = stats.bandColors && stats.bandColors[index]
+          ? stats.bandColors[index]
+          : { r: stats.r, g: stats.g, b: stats.b };
+        return `rgba(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)}, ${alpha})`;
+      }
+
       function setPlayButtonText(text) {
         els.playBtn.textContent = text;
         if (els.mobilePlayBtn) els.mobilePlayBtn.textContent = text;
@@ -1504,13 +1552,21 @@
           this.ctx = new Ctor();
           this.master = this.ctx.createGain();
           this.filter = this.ctx.createBiquadFilter();
+          this.dryGain = this.ctx.createGain();
+          this.reverbSend = this.ctx.createGain();
+          this.reverb = this.ctx.createConvolver();
+          this.reverbReturn = this.ctx.createGain();
           this.compressor = this.ctx.createDynamicsCompressor();
           this.analyser = this.ctx.createAnalyser();
+          this.recordDestination = this.ctx.createMediaStreamDestination();
           this.panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
           this.oscs = [];
           this.gains = [];
           this.started = false;
           this.master.gain.value = 0;
+          this.dryGain.gain.value = 0.82;
+          this.reverbSend.gain.value = 0.18;
+          this.reverbReturn.gain.value = 0.32;
           this.filter.type = "lowpass";
           this.filter.frequency.value = 900;
           this.filter.Q.value = 0.75;
@@ -1521,6 +1577,7 @@
           this.compressor.release.value = 0.16;
           this.analyser.fftSize = 1024;
           this.analyser.smoothingTimeConstant = 0.78;
+          this.reverb.buffer = this.createImpulseResponse(2.6, 2.8);
 
           const waveforms = ["sine", "triangle", "sine", "triangle"];
           for (let i = 0; i < 4; i++) {
@@ -1537,13 +1594,36 @@
 
           if (this.panner) {
             this.filter.connect(this.panner);
-            this.panner.connect(this.master);
+            this.panner.connect(this.dryGain);
+            this.panner.connect(this.reverbSend);
           } else {
-            this.filter.connect(this.master);
+            this.filter.connect(this.dryGain);
+            this.filter.connect(this.reverbSend);
           }
+          this.dryGain.connect(this.master);
+          this.reverbSend.connect(this.reverb);
+          this.reverb.connect(this.reverbReturn);
+          this.reverbReturn.connect(this.master);
           this.master.connect(this.compressor);
           this.compressor.connect(this.analyser);
+          this.compressor.connect(this.recordDestination);
           this.analyser.connect(this.ctx.destination);
+        }
+
+        createImpulseResponse(duration, decay) {
+          const sampleRate = this.ctx.sampleRate;
+          const length = Math.max(1, Math.floor(sampleRate * duration));
+          const impulse = this.ctx.createBuffer(2, length, sampleRate);
+          for (let channel = 0; channel < impulse.numberOfChannels; channel++) {
+            const data = impulse.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+              const t = i / length;
+              const envelope = Math.pow(1 - t, decay);
+              const early = i < sampleRate * 0.045 ? 0.35 : 1;
+              data[i] = (Math.random() * 2 - 1) * envelope * early;
+            }
+          }
+          return impulse;
         }
 
         async start() {
@@ -1598,11 +1678,17 @@
           let cutoff = lerp(450, 3600, Math.max(g, saturation * 0.35));
           let q = lerp(0.45, 4.2, Math.max(contrast, edge * 0.7));
           let pan = (b - r) * 0.7 + (edge - 0.5) * 0.18;
+          let reverbWet = 0.2;
+          let reverbReturn = 0.3;
+          let dryLevel = 0.86;
 
           if (mode === "smooth") {
             freqs = [base, base * (1.005 + r * 0.02), base * 0.5, base * 2];
             gains = [0.7, 0.14 + r * 0.11 + saturation * 0.07, 0.06 * b, 0.035 * Math.max(contrast, edge)];
             cutoff = lerp(520, 3000, Math.max(g, saturation * 0.45));
+            reverbWet = 0.18 + saturation * 0.08;
+            reverbReturn = 0.24;
+            dryLevel = 0.88;
           } else if (mode === "chord") {
             const root = quant(base);
             const major = stats.r >= stats.b;
@@ -1610,6 +1696,9 @@
             gains = [0.45, 0.24 + r * 0.1, 0.2 + g * 0.11, 0.1 + b * 0.08 + saturation * 0.04];
             cutoff = lerp(700, 4400, Math.max((r + g) * 0.5, saturation * 0.5));
             q = lerp(0.65, 3.1, Math.max(contrast, edge * 0.65));
+            reverbWet = 0.28 + saturation * 0.1;
+            reverbReturn = 0.32;
+            dryLevel = 0.82;
           } else if (mode === "arpeggio") {
             const step = Math.floor(scanX / 5) % verticalBands;
             const bandValue = stats.bands[step] / 255;
@@ -1619,6 +1708,9 @@
             gains = [0.58 + bandValue * 0.24, 0.1 + edge * 0.08, 0.04, 0.06 * Math.max(contrast, saturation)];
             cutoff = lerp(650, 3300, Math.max(bandValue, saturation * 0.35));
             q = lerp(0.7, 3.4, Math.max(bandValue, edge));
+            reverbWet = 0.2 + bandValue * 0.12;
+            reverbReturn = 0.25;
+            dryLevel = 0.9;
           } else if (mode === "ambient") {
             const root = quant(lerp(90, 260, brightnessNorm(stats, controls.invert)));
             freqs = [root, root * 1.498, root * 2.003, root * 0.501];
@@ -1626,6 +1718,9 @@
             cutoff = lerp(340, 2300, Math.max(g, saturation * 0.38));
             q = lerp(0.5, 2.0, Math.max(contrast * 0.75, edge * 0.45));
             pan = Math.sin(now * 0.18 + b * 2 + edge) * 0.42;
+            reverbWet = 0.48 + saturation * 0.2;
+            reverbReturn = 0.52;
+            dryLevel = 0.72;
           } else if (mode === "glitch") {
             const gateRate = edge > 0.45 ? 3 : 5;
             const gate = (Math.floor(scanX / gateRate) % 2 === 0) ? 1 : 0.3 + saturation * 0.12;
@@ -1639,6 +1734,9 @@
             ];
             cutoff = lerp(500, 4600, Math.max(g, contrast * 0.75, edge * 0.85));
             q = lerp(0.6, 5.2, Math.max(contrast, edge));
+            reverbWet = 0.08 + saturation * 0.08;
+            reverbReturn = 0.16;
+            dryLevel = 0.95;
           }
 
           freqs.forEach((freq, i) => {
@@ -1648,6 +1746,9 @@
           });
           this.ramp(this.filter.frequency, clamp(cutoff, 180, 5200), smooth);
           this.ramp(this.filter.Q, clamp(q, 0.3, 7), smooth);
+          this.ramp(this.dryGain.gain, clamp(dryLevel, 0.55, 1), smooth);
+          this.ramp(this.reverbSend.gain, clamp(reverbWet, 0, 0.75), smooth);
+          this.ramp(this.reverbReturn.gain, clamp(reverbReturn, 0, 0.65), smooth);
           if (this.panner) this.ramp(this.panner.pan, clamp(pan, -0.8, 0.8), smooth);
           this.setPlaying(state.isPlaying, controls, stats);
           return clamp(freqs[0], 60, 1200);
@@ -1783,8 +1884,7 @@
 
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.shadowBlur = 30 + state.pulse * 34;
-        ctx.shadowColor = stats.b > stats.r ? "#4de8ff" : "#ff4fd8";
+        ctx.shadowBlur = 0;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = Math.max(2, w * 0.004);
         ctx.beginPath();
@@ -1809,8 +1909,7 @@
         ctx.fillStyle = "rgba(3, 7, 18, 0.68)";
         ctx.strokeStyle = "rgba(77, 232, 255, 0.35)";
         ctx.lineWidth = 1;
-        ctx.shadowBlur = 18;
-        ctx.shadowColor = stats.b > stats.r ? "#4de8ff" : "#ff4fd8";
+        ctx.shadowBlur = 0;
         ctx.fillRect(graphX, graphY, graphW, graphH);
         ctx.strokeRect(graphX, graphY, graphW, graphH);
         const bandGap = 4;
@@ -1820,8 +1919,15 @@
           const bh = Math.max(3, v * (graphH - 22));
           const bx = graphX + bandGap + i * (bandW + bandGap);
           const by = graphY + graphH - bh - 8;
-          const hue = i % 2 ? "#ff4fd8" : "#4de8ff";
-          ctx.fillStyle = hue;
+          const color = stats.bandColors && stats.bandColors[i]
+            ? stats.bandColors[i]
+            : { r: stats.r, g: stats.g, b: stats.b };
+          const top = `rgba(${Math.round(lerp(255, color.r, 0.55))}, ${Math.round(lerp(255, color.g, 0.55))}, ${Math.round(lerp(255, color.b, 0.55))}, 1)`;
+          const bottom = `rgba(${Math.round(color.r * 0.45)}, ${Math.round(color.g * 0.45)}, ${Math.round(color.b * 0.45)}, 1)`;
+          const grad = ctx.createLinearGradient(0, by, 0, by + bh);
+          grad.addColorStop(0, top);
+          grad.addColorStop(1, bottom);
+          ctx.fillStyle = grad;
           ctx.globalAlpha = 0.58 + v * 0.42;
           ctx.fillRect(bx, by, bandW, bh);
         });
@@ -1840,8 +1946,7 @@
         progGrad.addColorStop(0.55, "#9a68ff");
         progGrad.addColorStop(1, "#ff4fd8");
         ctx.fillStyle = progGrad;
-        ctx.shadowColor = "#4de8ff";
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 0;
         ctx.fillRect(0, h - 12, w * progress, 12);
         ctx.restore();
 
@@ -1897,8 +2002,7 @@
           waveCtx.globalAlpha = 0.78;
           waveCtx.strokeStyle = "#ffffff";
           waveCtx.lineWidth = 2;
-          waveCtx.shadowBlur = 18;
-          waveCtx.shadowColor = "#4de8ff";
+          waveCtx.shadowBlur = 0;
           waveCtx.beginPath();
           for (let x = 0; x < w; x++) {
             const n = x / Math.max(1, w - 1);
@@ -1928,13 +2032,18 @@
           const bh = Math.max(4, v * (h - 26));
           const x = gap + i * (barW + gap);
           const y = h - bh - 12;
+          const color = stats.bandColors && stats.bandColors[i]
+            ? stats.bandColors[i]
+            : { r: stats.r, g: stats.g, b: stats.b };
+          const top = `rgb(${Math.round(lerp(255, color.r, 0.5))}, ${Math.round(lerp(255, color.g, 0.5))}, ${Math.round(lerp(255, color.b, 0.5))})`;
+          const mid = `rgb(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)})`;
+          const bottom = `rgb(${Math.round(color.r * 0.32)}, ${Math.round(color.g * 0.32)}, ${Math.round(color.b * 0.32)})`;
           const grad = columnCtx.createLinearGradient(0, y, 0, h);
-          grad.addColorStop(0, "#ffffff");
-          grad.addColorStop(0.38, i % 2 ? "#ff4fd8" : "#4de8ff");
-          grad.addColorStop(1, "#10172d");
+          grad.addColorStop(0, top);
+          grad.addColorStop(0.42, mid);
+          grad.addColorStop(1, bottom);
           columnCtx.fillStyle = grad;
-          columnCtx.shadowColor = i % 2 ? "#ff4fd8" : "#4de8ff";
-          columnCtx.shadowBlur = 12;
+          columnCtx.shadowBlur = 0;
           columnCtx.fillRect(x, y, barW, bh);
         }
         columnCtx.shadowBlur = 0;
@@ -1992,20 +2101,6 @@
         requestAnimationFrame(frame);
       }
 
-      function exportSnapshot() {
-        if (!state.hasImage) {
-          showError("Upload an image before exporting a snapshot.");
-          return;
-        }
-        const link = document.createElement("a");
-        link.download = "pixelsynth-snapshot.png";
-        link.href = els.mainCanvas.toDataURL("image/png");
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setStatus("Snapshot exported", "var(--green)");
-      }
-
       function finishRecording() {
         if (!state.recorder) return;
         if (state.recorder.state !== "inactive") {
@@ -2013,13 +2108,13 @@
         }
       }
 
-      function recordVisual() {
+      async function recordAudio() {
         if (!state.hasImage) {
-          showError("Upload an image before recording the visual scan.");
+          showError("Upload an image before recording audio.");
           return;
         }
         if (!recordingSupported) {
-          showError("This browser does not support canvas video recording. Snapshot PNG export is still available.");
+          showError("This browser does not support audio recording through MediaRecorder.");
           return;
         }
 
@@ -2028,20 +2123,35 @@
           return;
         }
 
-        const stream = els.mainCanvas.captureStream(30);
-        state.recordStream = stream;
+        const audio = ensureAudio();
+        if (!audio) return;
+        try {
+          await audio.start();
+        } catch (err) {
+          showError("Audio could not start, so recording cannot begin.");
+          console.error(err);
+          return;
+        }
+
+        if (!state.isPlaying) {
+          state.isPlaying = true;
+          state.lastFrame = performance.now();
+          setPlayButtonText("Pause");
+          els.audioState.textContent = "RECORDING";
+        }
+        audio.setPlaying(true, getControls(), state.currentStats);
+
         state.recordChunks = [];
-        const options = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-          ? { mimeType: "video/webm;codecs=vp9" }
-          : MediaRecorder.isTypeSupported("video/webm")
-            ? { mimeType: "video/webm" }
+        const stream = audio.recordDestination.stream;
+        const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? { mimeType: "audio/webm;codecs=opus" }
+          : MediaRecorder.isTypeSupported("audio/webm")
+            ? { mimeType: "audio/webm" }
             : {};
         try {
           state.recorder = new MediaRecorder(stream, options);
         } catch (err) {
-          stream.getTracks().forEach((track) => track.stop());
-          state.recordStream = null;
-          showError("Visual recording could not start in this browser. Snapshot PNG export is still available.");
+          showError("Audio recording could not start in this browser.");
           console.error(err);
           return;
         }
@@ -2050,25 +2160,23 @@
         };
         state.recorder.onstop = () => {
           clearTimeout(state.recordTimer);
-          const blob = new Blob(state.recordChunks, { type: "video/webm" });
-          if (state.recordStream) {
-            state.recordStream.getTracks().forEach((track) => track.stop());
-            state.recordStream = null;
-          }
+          const blob = new Blob(state.recordChunks, { type: state.recorder.mimeType || "audio/webm" });
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
-          link.download = "pixelsynth-visual.webm";
+          link.download = "image-to-audio-recording.webm";
           link.href = url;
           document.body.appendChild(link);
           link.click();
           link.remove();
           URL.revokeObjectURL(url);
-          els.recordBtn.textContent = "Record 8s Visual WebM";
-          setStatus("Visual recording exported", "var(--green)");
+          els.recordBtn.textContent = "Record 8s Audio";
+          els.audioState.textContent = state.isPlaying ? "PLAYING" : "IDLE";
+          setStatus("Audio recording exported", "var(--green)");
         };
         state.recorder.start();
         els.recordBtn.textContent = "Stop Recording";
-        setStatus("Recording visual scan", "var(--pink)");
+        els.audioState.textContent = "RECORDING";
+        setStatus("Recording audio", "var(--pink)");
         state.recordTimer = window.setTimeout(finishRecording, 8000);
       }
 
@@ -2100,8 +2208,7 @@
         els.playBtn.addEventListener("click", playPause);
         if (els.mobilePlayBtn) els.mobilePlayBtn.addEventListener("click", playPause);
         els.stopBtn.addEventListener("click", stopReset);
-        els.exportBtn.addEventListener("click", exportSnapshot);
-        els.recordBtn.addEventListener("click", recordVisual);
+        els.recordBtn.addEventListener("click", recordAudio);
 
         document.querySelectorAll("[data-preset]").forEach((button) => {
           button.addEventListener("click", () => applyPreset(button.dataset.preset));
@@ -2114,11 +2221,7 @@
           });
         });
 
-        els.eduToggle.addEventListener("change", () => {
-          els.eduPanel.classList.toggle("visible", els.eduToggle.checked);
-        });
-
-        [els.speedRange, els.pitchRange, els.volumeRange, els.smoothRange, els.modeSelect, els.loopToggle, els.invertToggle, els.muteToggle, els.eduToggle].forEach((control) => {
+        [els.speedRange, els.pitchRange, els.volumeRange, els.smoothRange, els.modeSelect, els.loopToggle, els.invertToggle, els.muteToggle].forEach((control) => {
           control.addEventListener("input", () => {
             updateControlLabels();
             if (state.audio) state.audio.setPlaying(state.isPlaying, getControls(), state.currentStats);
@@ -2132,9 +2235,6 @@
         });
 
         window.addEventListener("beforeunload", () => {
-        if (state.recordStream) {
-          state.recordStream.getTracks().forEach((track) => track.stop());
-        }
         if (state.audio && state.audio.ctx && state.audio.ctx.state !== "closed") {
           state.audio.ctx.close();
         }
@@ -2148,8 +2248,8 @@
         }
         bindEvents();
         applyPreset("soft");
-        initEmptySource();
-        setStatus("Ready for image upload", "var(--cyan)");
+        createSampleImage();
+        setStatus("Sample image ready", "var(--cyan)");
         requestAnimationFrame(frame);
       }
 
