@@ -98,25 +98,6 @@
       text-shadow: none;
     }
 
-    .subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: clamp(0.9rem, 1.1vw, 1rem);
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      white-space: nowrap;
-      padding: 7px 11px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(16, 22, 42, 0.62);
-      color: var(--muted);
-      box-shadow: none;
-    }
-
     .back-link {
       display: inline-flex;
       align-items: center;
@@ -137,14 +118,6 @@
     .back-link:hover {
       background: rgba(77, 232, 255, 0.15);
       transform: translateY(-1px);
-    }
-
-    .status-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: none;
     }
 
     .layout {
@@ -566,7 +539,7 @@
     #columnCanvas {
       display: block;
       width: 100%;
-      height: 108px;
+      height: 128px;
       border-radius: 6px;
       background:
         linear-gradient(180deg, rgba(77, 232, 255, 0.06), transparent),
@@ -781,7 +754,7 @@
       }
 
       #waveCanvas {
-        height: 150px;
+        height: 170px;
       }
 
       #columnCanvas {
@@ -819,11 +792,6 @@
     <header class="topbar">
       <div class="brand">
         <a class="back-link" href="/">Späť</a>
-        <p class="subtitle">Hear the hidden sound of your image</p>
-      </div>
-      <div class="status-pill" aria-live="polite">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Ready for image upload</span>
       </div>
     </header>
 
@@ -962,8 +930,8 @@
         <div class="visual-stack">
           <div class="viz-card">
             <div class="viz-title">
-              <span>Waveform / frequency field</span>
-              <span id="energyReadout">0.00</span>
+              <span>Real waveform + spectrum</span>
+              <span id="energyReadout">amp 0.00</span>
             </div>
             <canvas id="waveCanvas" width="640" height="300"></canvas>
           </div>
@@ -1097,8 +1065,6 @@
         currentMode: document.getElementById("currentMode"),
         audioState: document.getElementById("audioState"),
         audioNote: document.getElementById("audioNote"),
-        statusText: document.getElementById("statusText"),
-        statusDot: document.getElementById("statusDot"),
         energyReadout: document.getElementById("energyReadout"),
         columnReadout: document.getElementById("columnReadout")
       };
@@ -1167,12 +1133,6 @@
         }
         els.errorBox.textContent = message;
         els.errorBox.classList.add("visible");
-      }
-
-      function setStatus(text, color) {
-        els.statusText.textContent = text;
-        els.statusDot.style.background = color || "var(--green)";
-        els.statusDot.style.boxShadow = `0 0 18px ${color || "var(--green)"}`;
       }
 
       function resizeCanvasToDisplaySize(canvas, context) {
@@ -1365,17 +1325,17 @@
             sourceCtx.clearRect(0, 0, w, h);
             sourceCtx.drawImage(img, 0, 0, w, h);
             finalizeSource(file.name, `${img.width} x ${img.height} px${scale < 1 ? " -> " + w + " x " + h + " px" : ""}`);
-            setStatus("Image loaded", "var(--cyan)");
+
           };
           img.onerror = () => {
             showError("The image could not be loaded. No source image is active.");
-            setStatus("Image load failed", "var(--danger)");
+
           };
           img.src = reader.result;
         };
         reader.onerror = () => {
           showError("The browser could not read this file. Try another image.");
-          setStatus("File read failed", "var(--danger)");
+
         };
         reader.readAsDataURL(file);
       }
@@ -1543,7 +1503,7 @@
         });
         updateControlLabels();
         if (state.audio) state.audio.setPlaying(state.isPlaying, getControls(), state.currentStats);
-        setStatus(`${preset.label} preset loaded`, "var(--cyan)");
+
       }
 
       class PixelAudio {
@@ -1563,6 +1523,7 @@
           this.oscs = [];
           this.gains = [];
           this.started = false;
+          this.currentVoice = "";
           this.master.gain.value = 0;
           this.dryGain.gain.value = 0.82;
           this.reverbSend.gain.value = 0.18;
@@ -1626,6 +1587,17 @@
           return impulse;
         }
 
+        setOscTypes(types) {
+          const key = types.join(",");
+          if (this.currentVoice === key) return;
+          types.forEach((type, index) => {
+            if (this.oscs[index] && this.oscs[index].type !== type) {
+              this.oscs[index].type = type;
+            }
+          });
+          this.currentVoice = key;
+        }
+
         async start() {
           if (!this.started) {
             this.oscs.forEach((osc) => osc.start());
@@ -1681,64 +1653,74 @@
           let reverbWet = 0.2;
           let reverbReturn = 0.3;
           let dryLevel = 0.86;
+          let voice = ["sine", "triangle", "sine", "triangle"];
 
           if (mode === "smooth") {
-            freqs = [base, base * (1.005 + r * 0.02), base * 0.5, base * 2];
-            gains = [0.7, 0.14 + r * 0.11 + saturation * 0.07, 0.06 * b, 0.035 * Math.max(contrast, edge)];
-            cutoff = lerp(520, 3000, Math.max(g, saturation * 0.45));
-            reverbWet = 0.18 + saturation * 0.08;
-            reverbReturn = 0.24;
-            dryLevel = 0.88;
+            voice = ["sine", "sine", "triangle", "sine"];
+            freqs = [base, base * (1.003 + r * 0.012), base * 0.5, base * 1.997];
+            gains = [0.72, 0.1 + r * 0.06, 0.08 * b, 0.025 * Math.max(contrast, edge)];
+            cutoff = lerp(620, 2400, Math.max(g, saturation * 0.36));
+            q = lerp(0.35, 1.6, Math.max(contrast * 0.5, saturation * 0.25));
+            reverbWet = 0.2 + saturation * 0.08;
+            reverbReturn = 0.28;
+            dryLevel = 0.9;
           } else if (mode === "chord") {
+            voice = ["triangle", "triangle", "sine", "triangle"];
             const root = quant(base);
             const major = stats.r >= stats.b;
             freqs = [root, root * (major ? 1.25 : 1.2), root * (g > 0.48 ? 1.5 : 1.333), root * (1.875 + b * 0.22)];
-            gains = [0.45, 0.24 + r * 0.1, 0.2 + g * 0.11, 0.1 + b * 0.08 + saturation * 0.04];
-            cutoff = lerp(700, 4400, Math.max((r + g) * 0.5, saturation * 0.5));
-            q = lerp(0.65, 3.1, Math.max(contrast, edge * 0.65));
-            reverbWet = 0.28 + saturation * 0.1;
-            reverbReturn = 0.32;
-            dryLevel = 0.82;
+            gains = [0.38, 0.22 + r * 0.08, 0.2 + g * 0.08, 0.11 + b * 0.06 + saturation * 0.04];
+            cutoff = lerp(850, 3600, Math.max((r + g) * 0.5, saturation * 0.46));
+            q = lerp(0.55, 2.2, Math.max(contrast * 0.7, edge * 0.45));
+            reverbWet = 0.34 + saturation * 0.12;
+            reverbReturn = 0.4;
+            dryLevel = 0.78;
           } else if (mode === "arpeggio") {
+            voice = ["triangle", "square", "sine", "triangle"];
             const step = Math.floor(scanX / 5) % verticalBands;
             const bandValue = stats.bands[step] / 255;
-            const scale = [1, 1.125, 1.2, 1.333, 1.5, 1.667, 1.875, 2];
+            const scale = [1, 1.125, 1.25, 1.333, 1.5, 1.667, 1.875, 2];
             const root = quant(lerp(130, 340, brightnessNorm(stats, controls.invert)));
             freqs = [root * scale[step], root * scale[(step + 2) % scale.length], root * 0.5, root * 2];
-            gains = [0.58 + bandValue * 0.24, 0.1 + edge * 0.08, 0.04, 0.06 * Math.max(contrast, saturation)];
-            cutoff = lerp(650, 3300, Math.max(bandValue, saturation * 0.35));
-            q = lerp(0.7, 3.4, Math.max(bandValue, edge));
-            reverbWet = 0.2 + bandValue * 0.12;
-            reverbReturn = 0.25;
-            dryLevel = 0.9;
+            const pluck = (Math.floor(scanX / 4) % 2 === 0) ? 1 : 0.58;
+            gains = [(0.5 + bandValue * 0.22) * pluck, (0.07 + edge * 0.06) * pluck, 0.035, 0.045 * Math.max(contrast, saturation)];
+            cutoff = lerp(760, 3900, Math.max(bandValue, saturation * 0.35));
+            q = lerp(0.8, 3.0, Math.max(bandValue * 0.8, edge * 0.8));
+            reverbWet = 0.18 + bandValue * 0.1;
+            reverbReturn = 0.22;
+            dryLevel = 0.92;
           } else if (mode === "ambient") {
+            voice = ["sine", "triangle", "triangle", "sine"];
             const root = quant(lerp(90, 260, brightnessNorm(stats, controls.invert)));
-            freqs = [root, root * 1.498, root * 2.003, root * 0.501];
-            gains = [0.44, 0.19 + r * 0.08, 0.16 + b * 0.07, 0.15 + saturation * 0.06];
-            cutoff = lerp(340, 2300, Math.max(g, saturation * 0.38));
-            q = lerp(0.5, 2.0, Math.max(contrast * 0.75, edge * 0.45));
-            pan = Math.sin(now * 0.18 + b * 2 + edge) * 0.42;
-            reverbWet = 0.48 + saturation * 0.2;
-            reverbReturn = 0.52;
-            dryLevel = 0.72;
+            const drift = Math.sin(now * 0.08 + b * 3) * 0.004;
+            freqs = [root, root * (1.498 + drift), root * (2.003 - drift), root * 0.501];
+            gains = [0.38, 0.2 + r * 0.07, 0.18 + b * 0.07, 0.16 + saturation * 0.06];
+            cutoff = lerp(300, 1800, Math.max(g, saturation * 0.34));
+            q = lerp(0.35, 1.35, Math.max(contrast * 0.45, edge * 0.25));
+            pan = Math.sin(now * 0.12 + b * 2 + edge) * 0.48;
+            reverbWet = 0.58 + saturation * 0.14;
+            reverbReturn = 0.58;
+            dryLevel = 0.64;
           } else if (mode === "glitch") {
+            voice = ["square", "triangle", "square", "sine"];
             const gateRate = edge > 0.45 ? 3 : 5;
             const gate = (Math.floor(scanX / gateRate) % 2 === 0) ? 1 : 0.3 + saturation * 0.12;
             const root = quant(base);
             freqs = [root, root * (1.5 + r * 0.08), root * 2, root * 0.5];
             gains = [
-              (0.22 + contrast * 0.3 + edge * 0.16) * gate,
-              (0.07 + r * 0.15) * gate,
-              (0.035 + b * 0.09 + saturation * 0.04) * gate,
+              (0.18 + contrast * 0.22 + edge * 0.13) * gate,
+              (0.055 + r * 0.1) * gate,
+              (0.025 + b * 0.065 + saturation * 0.03) * gate,
               0.02
             ];
-            cutoff = lerp(500, 4600, Math.max(g, contrast * 0.75, edge * 0.85));
-            q = lerp(0.6, 5.2, Math.max(contrast, edge));
+            cutoff = lerp(620, 4300, Math.max(g, contrast * 0.7, edge * 0.82));
+            q = lerp(0.5, 4.2, Math.max(contrast, edge));
             reverbWet = 0.08 + saturation * 0.08;
-            reverbReturn = 0.16;
+            reverbReturn = 0.12;
             dryLevel = 0.95;
           }
 
+          this.setOscTypes(voice);
           freqs.forEach((freq, i) => {
             const safeFreq = clamp(freq, 60, 1200);
             this.ramp(this.oscs[i].frequency, safeFreq, smooth);
@@ -1763,7 +1745,7 @@
       function ensureAudio() {
         if (!audioSupported) {
           els.audioNote.textContent = "This browser does not support Web Audio API. Visual scanning is still available.";
-          setStatus("Audio unavailable", "var(--warning)");
+
           return null;
         }
         if (!state.audio) {
@@ -1775,7 +1757,7 @@
       async function playPause() {
         if (!state.hasImage || !state.columnStats.length) {
           showError("Upload an image before starting playback.");
-          setStatus("Waiting for image", "var(--warning)");
+
           return;
         }
         const controls = getControls();
@@ -1783,7 +1765,7 @@
           state.isPlaying = false;
           setPlayButtonText("Play");
           els.audioState.textContent = "PAUSED";
-          setStatus("Paused", "var(--warning)");
+
           if (state.audio) state.audio.setPlaying(false, controls, state.currentStats);
           return;
         }
@@ -1804,7 +1786,7 @@
         state.lastFrame = performance.now();
         setPlayButtonText("Pause");
         els.audioState.textContent = audio ? "PLAYING" : "VISUAL";
-        setStatus(audio ? "Synthesizing image" : "Visual scan only", audio ? "var(--green)" : "var(--warning)");
+
       }
 
       function stopReset() {
@@ -1815,9 +1797,9 @@
         els.audioState.textContent = "IDLE";
         if (state.audio) state.audio.stopNow();
         if (state.hasImage) {
-          setStatus("Reset to first column", "var(--cyan)");
+
         } else {
-          setStatus("Ready for image upload", "var(--cyan)");
+
         }
       }
 
@@ -1963,57 +1945,91 @@
         waveCtx.fillRect(0, 0, w, h);
 
         const analyser = state.audio && state.audio.analyser;
-        const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 512);
+        const waveformH = h * 0.62;
+        const spectrumTop = waveformH + 14;
+        const spectrumH = Math.max(20, h - spectrumTop - 12);
+        const data = new Uint8Array(analyser ? analyser.fftSize : 1024);
         if (analyser && state.audio.started) {
-          analyser.getByteFrequencyData(data);
+          analyser.getByteTimeDomainData(data);
         } else {
           const t = performance.now() * 0.001;
           for (let i = 0; i < data.length; i++) {
-            data[i] = 18 + Math.sin(i * 0.13 + t * 2.4) * 10 + Math.sin(i * 0.037 + t) * 14;
+            data[i] = 128 + Math.sin(i * 0.055 + t * 2.2) * 12 + Math.sin(i * 0.017 + t * 1.1) * 5;
           }
         }
 
-        let energy = 0;
-        for (let i = 0; i < data.length; i++) energy += data[i];
-        energy = energy / data.length / 255;
-        els.energyReadout.textContent = energy.toFixed(2);
+        let sum = 0;
+        let peak = 0;
+        for (let i = 0; i < data.length; i++) {
+          const centered = (data[i] - 128) / 128;
+          sum += centered * centered;
+          peak = Math.max(peak, Math.abs(centered));
+        }
+        const rms = Math.sqrt(sum / data.length);
+        els.energyReadout.textContent = `amp ${rms.toFixed(2)}`;
 
-        const barCount = 72;
-        const gap = 2;
-        const barW = Math.max(2, (w - gap * (barCount - 1)) / barCount);
+        waveCtx.strokeStyle = "rgba(255,255,255,0.14)";
+        waveCtx.lineWidth = 1;
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, waveformH / 2);
+        waveCtx.lineTo(w, waveformH / 2);
+        waveCtx.stroke();
+
         const grad = waveCtx.createLinearGradient(0, 0, w, 0);
         grad.addColorStop(0, "#4de8ff");
-        grad.addColorStop(0.5, "#9a68ff");
+        grad.addColorStop(0.5, "#ffffff");
         grad.addColorStop(1, "#ff4fd8");
-        waveCtx.fillStyle = grad;
+        waveCtx.strokeStyle = grad;
+        waveCtx.lineWidth = 2;
+        waveCtx.beginPath();
+        for (let x = 0; x < w; x++) {
+          const idx = Math.floor((x / Math.max(1, w - 1)) * (data.length - 1));
+          const sample = (data[idx] - 128) / 128;
+          const y = waveformH / 2 + sample * waveformH * 0.42;
+          if (x === 0) waveCtx.moveTo(x, y);
+          else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
 
+        waveCtx.fillStyle = "rgba(255,255,255,0.55)";
+        waveCtx.fillRect(0, waveformH / 2 - peak * waveformH * 0.42, 3, Math.max(2, peak * waveformH * 0.84));
+
+        waveCtx.fillStyle = "rgba(255,255,255,0.48)";
+        waveCtx.font = "10px Arial, sans-serif";
+        waveCtx.fillText("frequency spectrum", 0, spectrumTop - 4);
+        waveCtx.strokeStyle = "rgba(255,255,255,0.12)";
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, spectrumTop + spectrumH);
+        waveCtx.lineTo(w, spectrumTop + spectrumH);
+        waveCtx.stroke();
+
+        const freqData = new Uint8Array(analyser ? analyser.frequencyBinCount : 512);
+        if (analyser && state.audio.started) {
+          analyser.getByteFrequencyData(freqData);
+        } else {
+          for (let i = 0; i < freqData.length; i++) {
+            freqData[i] = Math.max(0, 55 - i * 0.16 + Math.sin(i * 0.09 + performance.now() * 0.002) * 8);
+          }
+        }
+
+        const barCount = 42;
+        const gap = 2;
+        const barW = Math.max(2, (w - gap * (barCount - 1)) / barCount);
+        const specGrad = waveCtx.createLinearGradient(0, spectrumTop, w, spectrumTop);
+        specGrad.addColorStop(0, "#4de8ff");
+        specGrad.addColorStop(0.55, "#ffffff");
+        specGrad.addColorStop(1, "#ff4fd8");
+        waveCtx.fillStyle = specGrad;
         for (let i = 0; i < barCount; i++) {
-          const idx = Math.floor((i / barCount) * data.length);
-          const v = clamp(data[idx] / 255, 0.025, 1);
-          const bh = v * h * 0.86;
+          const idx = Math.floor(Math.pow(i / barCount, 1.4) * (freqData.length - 1));
+          const value = clamp(freqData[idx] / 255, 0, 1);
+          const bh = Math.max(1, value * spectrumH);
           const x = i * (barW + gap);
-          const y = h - bh;
-          waveCtx.globalAlpha = 0.68 + v * 0.32;
+          const y = spectrumTop + spectrumH - bh;
+          waveCtx.globalAlpha = 0.35 + value * 0.55;
           waveCtx.fillRect(x, y, barW, bh);
         }
-
-        const stats = state.currentStats || state.columnStats[0];
-        if (stats) {
-          waveCtx.globalAlpha = 0.78;
-          waveCtx.strokeStyle = "#ffffff";
-          waveCtx.lineWidth = 2;
-          waveCtx.shadowBlur = 0;
-          waveCtx.beginPath();
-          for (let x = 0; x < w; x++) {
-            const n = x / Math.max(1, w - 1);
-            const y = h * 0.42 + Math.sin(n * Math.PI * 6 + performance.now() * 0.004) * h * 0.08 * (0.4 + stats.contrast / 90);
-            if (x === 0) waveCtx.moveTo(x, y);
-            else waveCtx.lineTo(x, y);
-          }
-          waveCtx.stroke();
-          waveCtx.shadowBlur = 0;
-          waveCtx.globalAlpha = 1;
-        }
+        waveCtx.globalAlpha = 1;
       }
 
       function drawColumnGraph(stats) {
@@ -2069,7 +2085,7 @@
             setPlayButtonText("Play");
             els.audioState.textContent = "DONE";
             if (state.audio) state.audio.setPlaying(false, controls, state.currentStats);
-            setStatus("Scan complete", "var(--cyan)");
+
           }
         }
       }
@@ -2171,12 +2187,12 @@
           URL.revokeObjectURL(url);
           els.recordBtn.textContent = "Record 8s Audio";
           els.audioState.textContent = state.isPlaying ? "PLAYING" : "IDLE";
-          setStatus("Audio recording exported", "var(--green)");
+
         };
         state.recorder.start();
         els.recordBtn.textContent = "Stop Recording";
         els.audioState.textContent = "RECORDING";
-        setStatus("Recording audio", "var(--pink)");
+
         state.recordTimer = window.setTimeout(finishRecording, 8000);
       }
 
@@ -2249,7 +2265,7 @@
         bindEvents();
         applyPreset("soft");
         createSampleImage();
-        setStatus("Sample image ready", "var(--cyan)");
+
         requestAnimationFrame(frame);
       }
 
