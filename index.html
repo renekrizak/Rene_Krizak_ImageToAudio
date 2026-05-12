@@ -1781,64 +1781,103 @@
           const Ctor = window.AudioContext || window.webkitAudioContext;
           this.ctx = new Ctor();
           this.master = this.ctx.createGain();
+          this.mixer = this.ctx.createGain();
+          this.highpass = this.ctx.createBiquadFilter();
           this.filter = this.ctx.createBiquadFilter();
           this.dryGain = this.ctx.createGain();
           this.reverbSend = this.ctx.createGain();
           this.reverb = this.ctx.createConvolver();
           this.reverbReturn = this.ctx.createGain();
+          this.saturation = this.ctx.createWaveShaper();
           this.compressor = this.ctx.createDynamicsCompressor();
+          this.limiter = this.ctx.createWaveShaper();
           this.analyser = this.ctx.createAnalyser();
           this.recordDestination = this.ctx.createMediaStreamDestination();
-          this.panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+          this.lfo = this.ctx.createOscillator();
+          this.lfoGain = this.ctx.createGain();
           this.oscs = [];
           this.gains = [];
+          this.voicePanners = [];
           this.started = false;
           this.currentVoice = "";
           this.master.gain.value = 0;
+          this.mixer.gain.value = 1;
           this.dryGain.gain.value = 0.82;
           this.reverbSend.gain.value = 0.18;
           this.reverbReturn.gain.value = 0.32;
+          this.highpass.type = "highpass";
+          this.highpass.frequency.value = 75;
+          this.highpass.Q.value = 0.5;
           this.filter.type = "lowpass";
           this.filter.frequency.value = 900;
           this.filter.Q.value = 0.75;
-          this.compressor.threshold.value = -24;
-          this.compressor.knee.value = 18;
-          this.compressor.ratio.value = 8;
-          this.compressor.attack.value = 0.006;
-          this.compressor.release.value = 0.16;
+          this.compressor.threshold.value = -12;
+          this.compressor.knee.value = 10;
+          this.compressor.ratio.value = 4;
+          this.compressor.attack.value = 0.003;
+          this.compressor.release.value = 0.12;
+          this.saturation.curve = this.makeSoftClipCurve(2.4);
+          this.saturation.oversample = "2x";
+          this.limiter.curve = this.makeSoftClipCurve(1.6);
+          this.limiter.oversample = "2x";
           this.analyser.fftSize = 1024;
           this.analyser.smoothingTimeConstant = 0.78;
           this.reverb.buffer = this.createImpulseResponse(2.6, 2.8);
+          this.lfo.type = "sine";
+          this.lfo.frequency.value = 5.1;
+          this.lfoGain.gain.value = 3;
+          this.lfo.connect(this.lfoGain);
 
           const waveforms = ["sine", "triangle", "sine", "triangle"];
+          const detuneOffsets = [-7, 3, 5, -2];
+          const staticPans = [0, 0.4, -0.4, 0];
+          const supportsPan = typeof this.ctx.createStereoPanner === "function";
           for (let i = 0; i < 4; i++) {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
             osc.type = waveforms[i];
             osc.frequency.value = 160 + i * 80;
+            osc.detune.value = detuneOffsets[i];
             gain.gain.value = 0;
             osc.connect(gain);
-            gain.connect(this.filter);
+            const voicePan = supportsPan ? this.ctx.createStereoPanner() : null;
+            if (voicePan) {
+              voicePan.pan.value = staticPans[i];
+              gain.connect(voicePan);
+              voicePan.connect(this.mixer);
+            } else {
+              gain.connect(this.mixer);
+            }
+            this.lfoGain.connect(osc.detune);
             this.oscs.push(osc);
             this.gains.push(gain);
+            this.voicePanners.push(voicePan);
           }
 
-          if (this.panner) {
-            this.filter.connect(this.panner);
-            this.panner.connect(this.dryGain);
-            this.panner.connect(this.reverbSend);
-          } else {
-            this.filter.connect(this.dryGain);
-            this.filter.connect(this.reverbSend);
-          }
+          this.mixer.connect(this.highpass);
+          this.highpass.connect(this.filter);
+          this.filter.connect(this.dryGain);
+          this.filter.connect(this.reverbSend);
           this.dryGain.connect(this.master);
           this.reverbSend.connect(this.reverb);
           this.reverb.connect(this.reverbReturn);
           this.reverbReturn.connect(this.master);
-          this.master.connect(this.compressor);
-          this.compressor.connect(this.analyser);
-          this.compressor.connect(this.recordDestination);
+          this.master.connect(this.saturation);
+          this.saturation.connect(this.compressor);
+          this.compressor.connect(this.limiter);
+          this.limiter.connect(this.analyser);
+          this.limiter.connect(this.recordDestination);
           this.analyser.connect(this.ctx.destination);
+        }
+
+        makeSoftClipCurve(drive, samples = 1024) {
+          const curve = new Float32Array(samples);
+          const norm = Math.tanh(drive);
+          for (let i = 0; i < samples; i++) {
+            const x = (i / (samples - 1)) * 2 - 1;
+            curve[i] = Math.tanh(drive * x) / norm;
+          }
+          return curve;
         }
 
         createImpulseResponse(duration, decay) {
@@ -1871,6 +1910,7 @@
         async start() {
           if (!this.started) {
             this.oscs.forEach((osc) => osc.start());
+            if (this.lfo) this.lfo.start();
             this.started = true;
           }
           if (this.ctx.state === "suspended") {
@@ -1890,7 +1930,7 @@
           const volume = controls.muted ? 0 : controls.volume;
           const contrast = stats ? clamp(stats.contrast / 90, 0, 1) : 0;
           const edge = stats ? clamp(stats.edge / 100, 0, 1) : 0;
-          const target = playing ? clamp(0.014 + volume * (0.075 + contrast * 0.026 + edge * 0.018), 0, 0.12) : 0;
+          const target = playing ? clamp(0.024 + volume * (0.18 + contrast * 0.06 + edge * 0.04), 0, 0.32) : 0;
           this.master.gain.cancelScheduledValues(now);
           this.master.gain.setTargetAtTime(target, now, playing ? 0.08 : 0.045);
         }
@@ -2001,7 +2041,7 @@
           this.ramp(this.dryGain.gain, clamp(dryLevel, 0.55, 1), smooth);
           this.ramp(this.reverbSend.gain, clamp(reverbWet, 0, 0.75), smooth);
           this.ramp(this.reverbReturn.gain, clamp(reverbReturn, 0, 0.65), smooth);
-          if (this.panner) this.ramp(this.panner.pan, clamp(pan, -0.8, 0.8), smooth);
+          if (this.voicePanners[3]) this.ramp(this.voicePanners[3].pan, clamp(pan, -0.8, 0.8), smooth);
           this.setPlaying(state.isPlaying, controls, stats);
           return clamp(freqs[0], 60, 1200);
         }
