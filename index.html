@@ -548,6 +548,12 @@
       gap: 6px;
     }
 
+    .scale-key-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 6px;
+    }
+
     .switch {
       display: flex;
       align-items: center;
@@ -1086,6 +1092,8 @@
               <button class="preset-btn" type="button" data-preset="cyber">Cyber Scan</button>
               <button class="preset-btn" type="button" data-preset="choir">Pixel Choir</button>
               <button class="preset-btn" type="button" data-preset="rhythm">Rhythmic Glitch</button>
+              <button class="preset-btn" type="button" data-preset="musicbox">Music Box</button>
+              <button class="preset-btn" type="button" data-preset="sequencer">Sequencer</button>
             </div>
           </div>
 
@@ -1135,6 +1143,38 @@
             </select>
           </div>
 
+          <div class="field">
+            <div class="field-head">
+              <label>Scale &amp; key</label>
+              <span class="field-value" id="scaleKeyValue">C Dorian</span>
+            </div>
+            <div class="scale-key-row">
+              <select id="scaleSelect" aria-label="Scale">
+                <option value="dorian">Dorian</option>
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+                <option value="pentMajor">Pent. Major</option>
+                <option value="pentMinor">Pent. Minor</option>
+                <option value="phrygian">Phrygian</option>
+                <option value="chromatic">Chromatic</option>
+              </select>
+              <select id="keySelect" aria-label="Root key">
+                <option value="0">C</option>
+                <option value="1">C#</option>
+                <option value="2">D</option>
+                <option value="3">D#</option>
+                <option value="4">E</option>
+                <option value="5">F</option>
+                <option value="6">F#</option>
+                <option value="7">G</option>
+                <option value="8">G#</option>
+                <option value="9">A</option>
+                <option value="10">A#</option>
+                <option value="11">B</option>
+              </select>
+            </div>
+          </div>
+
           <div class="switches">
             <label class="switch" for="loopToggle">
               <span>Loop</span>
@@ -1147,6 +1187,14 @@
             <label class="switch" for="muteToggle">
               <span>Mute</span>
               <input id="muteToggle" type="checkbox">
+            </label>
+            <label class="switch" for="lockScaleToggle">
+              <span>Lock to scale</span>
+              <input id="lockScaleToggle" type="checkbox">
+            </label>
+            <label class="switch" for="onsetsToggle">
+              <span>Edge onsets</span>
+              <input id="onsetsToggle" type="checkbox" checked>
             </label>
           </div>
 
@@ -1290,6 +1338,11 @@
         loopToggle: document.getElementById("loopToggle"),
         invertToggle: document.getElementById("invertToggle"),
         muteToggle: document.getElementById("muteToggle"),
+        scaleSelect: document.getElementById("scaleSelect"),
+        keySelect: document.getElementById("keySelect"),
+        lockScaleToggle: document.getElementById("lockScaleToggle"),
+        onsetsToggle: document.getElementById("onsetsToggle"),
+        scaleKeyValue: document.getElementById("scaleKeyValue"),
         presetValue: document.getElementById("presetValue"),
         speedValue: document.getElementById("speedValue"),
         pitchValue: document.getElementById("pitchValue"),
@@ -1348,11 +1401,35 @@
         glitch: "Glitch Mode"
       };
       const presets = {
-        soft: { label: "Soft Ambient", mode: "ambient", speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false },
-        cyber: { label: "Cyber Scan", mode: "smooth", speed: 66, pitch: 78, volume: 42, smooth: 54, loop: true, invert: false },
-        choir: { label: "Pixel Choir", mode: "chord", speed: 38, pitch: 64, volume: 36, smooth: 72, loop: true, invert: false },
-        rhythm: { label: "Rhythmic Glitch", mode: "glitch", speed: 84, pitch: 58, volume: 30, smooth: 32, loop: true, invert: false }
+        soft:      { label: "Soft Ambient",   mode: "ambient",  speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false, scale: "dorian",    root: 0, lockScale: false, onsets: false },
+        cyber:     { label: "Cyber Scan",     mode: "smooth",   speed: 66, pitch: 78, volume: 42, smooth: 54, loop: true, invert: false, scale: "phrygian",  root: 9, lockScale: false, onsets: true  },
+        choir:     { label: "Pixel Choir",    mode: "chord",    speed: 38, pitch: 64, volume: 36, smooth: 72, loop: true, invert: false, scale: "major",     root: 0, lockScale: false, onsets: false },
+        rhythm:    { label: "Rhythmic Glitch", mode: "glitch",  speed: 84, pitch: 58, volume: 30, smooth: 32, loop: true, invert: false, scale: "pentMinor", root: 9, lockScale: false, onsets: true  },
+        musicbox:  { label: "Music Box",      mode: "smooth",   speed: 42, pitch: 60, volume: 42, smooth: 45, loop: true, invert: false, scale: "pentMinor", root: 2, lockScale: true,  onsets: true  },
+        sequencer: { label: "Sequencer",      mode: "arpeggio", speed: 72, pitch: 52, volume: 42, smooth: 22, loop: true, invert: false, scale: "pentMinor", root: 4, lockScale: true,  onsets: true  }
       };
+
+      const scales = {
+        major:     [0, 2, 4, 5, 7, 9, 11],
+        minor:     [0, 2, 3, 5, 7, 8, 10],
+        pentMajor: [0, 2, 4, 7, 9],
+        pentMinor: [0, 3, 5, 7, 10],
+        dorian:    [0, 2, 3, 5, 7, 9, 10],
+        phrygian:  [0, 1, 3, 5, 7, 8, 10],
+        chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+      };
+
+      const scaleNames = {
+        major: "Major",
+        minor: "Minor",
+        pentMajor: "Pent. Major",
+        pentMinor: "Pent. Minor",
+        dorian: "Dorian",
+        phrygian: "Phrygian",
+        chromatic: "Chromatic"
+      };
+
+      const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
       const state = {
         isPlaying: false,
@@ -1379,7 +1456,10 @@
         mouseCanvasY: -1,
         brushSize: 12,
         brushColor: "#ffffff",
-        originalImageBackup: null
+        originalImageBackup: null,
+        lastEdge: 0,
+        lastOnsetAt: 0,
+        lastColumn: -1
       };
 
       function clamp(value, min, max) {
@@ -1614,6 +1694,9 @@
         state.sourceLabel = label;
         state.scanX = 0;
         state.lastStep = -1;
+        state.lastEdge = 0;
+        state.lastOnsetAt = 0;
+        state.lastColumn = -1;
         state.isPlaying = false;
         setPlayButtonText("Play");
         els.mainCanvas.width = sourceCanvas.width;
@@ -1720,7 +1803,11 @@
           mode: els.modeSelect.value,
           loop: els.loopToggle.checked,
           invert: els.invertToggle.checked,
-          muted: els.muteToggle.checked
+          muted: els.muteToggle.checked,
+          scale: els.scaleSelect.value,
+          root: Number(els.keySelect.value) || 0,
+          lockScale: els.lockScaleToggle.checked,
+          onsets: els.onsetsToggle.checked
         };
       }
 
@@ -1767,6 +1854,10 @@
         els.smoothRange.value = preset.smooth;
         els.loopToggle.checked = preset.loop;
         els.invertToggle.checked = preset.invert;
+        if (preset.scale !== undefined) els.scaleSelect.value = preset.scale;
+        if (preset.root !== undefined) els.keySelect.value = String(preset.root);
+        if (preset.lockScale !== undefined) els.lockScaleToggle.checked = preset.lockScale;
+        if (preset.onsets !== undefined) els.onsetsToggle.checked = preset.onsets;
         els.presetValue.textContent = preset.label;
         document.querySelectorAll("[data-preset]").forEach((button) => {
           button.classList.toggle("active", button.dataset.preset === name);
@@ -1795,6 +1886,8 @@
           this.recordDestination = this.ctx.createMediaStreamDestination();
           this.lfo = this.ctx.createOscillator();
           this.lfoGain = this.ctx.createGain();
+          this.pluckOsc = this.ctx.createOscillator();
+          this.pluckGain = this.ctx.createGain();
           this.oscs = [];
           this.gains = [];
           this.voicePanners = [];
@@ -1827,6 +1920,12 @@
           this.lfo.frequency.value = 5.1;
           this.lfoGain.gain.value = 3;
           this.lfo.connect(this.lfoGain);
+          this.pluckOsc.type = "triangle";
+          this.pluckOsc.frequency.value = 440;
+          this.pluckGain.gain.value = 0;
+          this.pluckOsc.connect(this.pluckGain);
+          this.pluckGain.connect(this.mixer);
+          this.lfoGain.connect(this.pluckOsc.detune);
 
           const waveforms = ["sine", "triangle", "sine", "triangle"];
           const detuneOffsets = [-7, 3, 5, -2];
@@ -1907,10 +2006,24 @@
           this.currentVoice = key;
         }
 
+        triggerOnset(freq, intensity) {
+          if (!this.started || !this.pluckOsc) return;
+          const safe = clamp(freq * 2, 80, 3200);
+          const now = this.ctx.currentTime;
+          const peak = clamp(0.22 + intensity * 0.32, 0.12, 0.6);
+          this.pluckOsc.frequency.cancelScheduledValues(now);
+          this.pluckOsc.frequency.setValueAtTime(safe, now);
+          this.pluckGain.gain.cancelScheduledValues(now);
+          this.pluckGain.gain.setValueAtTime(0, now);
+          this.pluckGain.gain.linearRampToValueAtTime(peak, now + 0.004);
+          this.pluckGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+        }
+
         async start() {
           if (!this.started) {
             this.oscs.forEach((osc) => osc.start());
             if (this.lfo) this.lfo.start();
+            if (this.pluckOsc) this.pluckOsc.start();
             this.started = true;
           }
           if (this.ctx.state === "suspended") {
@@ -1947,12 +2060,24 @@
           const saturation = clamp(stats.saturation / 255, 0, 1);
           const edge = clamp(stats.edge / 110, 0, 1);
           const mode = controls.mode;
+          const scaleIntervals = scales[controls.scale] || scales.dorian;
+          const rootSemi = ((controls.root | 0) % 12 + 12) % 12;
           const quant = (freq) => {
-            const scale = [0, 2, 3, 5, 7, 9, 10];
+            if (!(freq > 0)) return freq;
             const midi = Math.round(12 * Math.log2(freq / 440) + 69);
-            const octave = Math.floor(midi / 12);
-            const note = scale.reduce((best, n) => Math.abs(n - (midi % 12)) < Math.abs(best - (midi % 12)) ? n : best, scale[0]);
-            return 440 * Math.pow(2, ((octave * 12 + note) - 69) / 12);
+            const rel = midi - rootSemi;
+            const octave = Math.floor(rel / 12);
+            const inOctave = ((rel % 12) + 12) % 12;
+            let bestInterval = scaleIntervals[0];
+            let bestDist = Math.abs(inOctave - bestInterval);
+            for (let i = 1; i < scaleIntervals.length; i++) {
+              const d = Math.abs(inOctave - scaleIntervals[i]);
+              if (d < bestDist) { bestDist = d; bestInterval = scaleIntervals[i]; }
+            }
+            const wrapD = Math.abs(inOctave - 12);
+            if (wrapD < bestDist) bestInterval = 12;
+            const targetMidi = octave * 12 + rootSemi + bestInterval;
+            return 440 * Math.pow(2, (targetMidi - 69) / 12);
           };
 
           let freqs = [base, base * 1.5, base * 2, base * 0.75];
@@ -1967,7 +2092,8 @@
 
           if (mode === "smooth") {
             voice = ["sine", "sine", "triangle", "sine"];
-            freqs = [base, base * (1.003 + r * 0.012), base * 0.5, base * 1.997];
+            const lead = controls.lockScale ? quant(base) : base;
+            freqs = [lead, lead * (1.003 + r * 0.012), lead * 0.5, lead * 1.997];
             gains = [0.72, 0.1 + r * 0.06, 0.08 * b, 0.025 * Math.max(contrast, edge)];
             cutoff = lerp(620, 2400, Math.max(g, saturation * 0.36));
             q = lerp(0.35, 1.6, Math.max(contrast * 0.5, saturation * 0.25));
@@ -2110,6 +2236,9 @@
         state.scanX = 0;
         state.lastStep = -1;
         state.currentFrequency = 0;
+        state.lastEdge = 0;
+        state.lastOnsetAt = 0;
+        state.lastColumn = -1;
         setPlayButtonText("Play");
         els.audioState.textContent = "IDLE";
         if (state.audio) state.audio.stopNow();
@@ -2136,6 +2265,7 @@
         els.smoothValue.textContent = `${Math.round(c.smoothness * 100)}%`;
         els.modeValue.textContent = modeNames[c.mode];
         els.currentMode.textContent = modeNames[c.mode];
+        els.scaleKeyValue.textContent = `${noteNames[c.root] || "C"} ${scaleNames[c.scale] || "Dorian"}`;
       }
 
       function updateMetrics(stats) {
@@ -2449,6 +2579,17 @@
           } else {
             state.currentFrequency = frequencyFromStats(stats, controls);
           }
+          if (state.isPlaying && controls.onsets && state.audio && state.audio.started && col !== state.lastColumn) {
+            const edgeDelta = stats.edge - state.lastEdge;
+            const onsetGap = now - state.lastOnsetAt;
+            if (edgeDelta > 18 && stats.edge > 28 && onsetGap > 38) {
+              const intensity = clamp(edgeDelta / 70, 0, 1);
+              state.audio.triggerOnset(state.currentFrequency, intensity);
+              state.lastOnsetAt = now;
+            }
+            state.lastEdge = stats.edge;
+            state.lastColumn = col;
+          }
           drawMain(stats);
           drawColumnGraph(stats);
           updateMetrics(stats);
@@ -2680,7 +2821,7 @@
           });
         });
 
-        [els.speedRange, els.pitchRange, els.volumeRange, els.smoothRange, els.modeSelect, els.loopToggle, els.invertToggle, els.muteToggle].forEach((control) => {
+        [els.speedRange, els.pitchRange, els.volumeRange, els.smoothRange, els.modeSelect, els.loopToggle, els.invertToggle, els.muteToggle, els.scaleSelect, els.keySelect, els.lockScaleToggle, els.onsetsToggle].forEach((control) => {
           control.addEventListener("input", () => {
             updateControlLabels();
             if (state.audio) state.audio.setPlaying(state.isPlaying, getControls(), state.currentStats);
