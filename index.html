@@ -1333,6 +1333,7 @@
       const columnCtx = els.columnCanvas.getContext("2d");
       const sourceCanvas = document.createElement("canvas");
       const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+      const waveBuffers = { time: null, freq: null };
 
       const audioSupported = Boolean(window.AudioContext || window.webkitAudioContext);
       const recordingSupported = Boolean(window.MediaRecorder);
@@ -2039,6 +2040,12 @@
           return;
         }
 
+        const maxX = Math.max(0, sourceCanvas.width - 1);
+        if (state.scanX >= maxX) {
+          state.scanX = 0;
+          state.lastStep = -1;
+        }
+
         const audio = ensureAudio();
         if (audio) {
           try {
@@ -2062,14 +2069,23 @@
         state.isPlaying = false;
         state.scanX = 0;
         state.lastStep = -1;
+        state.currentFrequency = 0;
         setPlayButtonText("Play");
         els.audioState.textContent = "IDLE";
         if (state.audio) state.audio.stopNow();
-        if (state.hasImage) {
-
+        if (state.hasImage && state.columnStats.length) {
+          state.currentStats = state.columnStats[0];
+          updateMetrics(state.currentStats);
+          drawMain(state.currentStats);
+          drawColumnGraph(state.currentStats);
         } else {
-
+          state.currentStats = null;
+          drawEmptyStage();
+          drawColumnGraph(null);
+          resetMetrics();
         }
+        els.progressText.textContent = "0.0%";
+        els.scanCoord.textContent = `x 0 / ${els.mainCanvas.width}`;
       }
 
       function updateControlLabels() {
@@ -2228,7 +2244,11 @@
         const waveformH = h * 0.62;
         const spectrumTop = waveformH + 14;
         const spectrumH = Math.max(20, h - spectrumTop - 12);
-        const data = new Uint8Array(analyser ? analyser.fftSize : 1024);
+        const timeLen = analyser ? analyser.fftSize : 1024;
+        if (!waveBuffers.time || waveBuffers.time.length !== timeLen) {
+          waveBuffers.time = new Uint8Array(timeLen);
+        }
+        const data = waveBuffers.time;
         if (analyser && state.audio.started) {
           analyser.getByteTimeDomainData(data);
         } else {
@@ -2283,7 +2303,11 @@
         waveCtx.lineTo(w, spectrumTop + spectrumH);
         waveCtx.stroke();
 
-        const freqData = new Uint8Array(analyser ? analyser.frequencyBinCount : 512);
+        const freqLen = analyser ? analyser.frequencyBinCount : 512;
+        if (!waveBuffers.freq || waveBuffers.freq.length !== freqLen) {
+          waveBuffers.freq = new Uint8Array(freqLen);
+        }
+        const freqData = waveBuffers.freq;
         if (analyser && state.audio.started) {
           analyser.getByteFrequencyData(freqData);
         } else {
