@@ -1459,7 +1459,9 @@
         originalImageBackup: null,
         lastEdge: 0,
         lastOnsetAt: 0,
-        lastColumn: -1
+        lastColumn: -1,
+        currentRms: 0,
+        envelope: 0
       };
 
       function clamp(value, min, max) {
@@ -1888,16 +1890,34 @@
           this.lfoGain = this.ctx.createGain();
           this.pluckOsc = this.ctx.createOscillator();
           this.pluckGain = this.ctx.createGain();
+          this.subOsc = this.ctx.createOscillator();
+          this.subGain = this.ctx.createGain();
+          this.delaySend = this.ctx.createGain();
+          this.delayL = this.ctx.createDelay(2.0);
+          this.delayR = this.ctx.createDelay(2.0);
+          this.delayLP = this.ctx.createBiquadFilter();
+          this.delayFB = this.ctx.createGain();
+          this.delayReturn = this.ctx.createGain();
           this.oscs = [];
           this.gains = [];
           this.voicePanners = [];
           this.started = false;
           this.currentVoice = "";
+          this.baseReverbReturn = 0.32;
+          this.duckAmount = 0;
           this.master.gain.value = 0;
           this.mixer.gain.value = 1;
           this.dryGain.gain.value = 0.82;
           this.reverbSend.gain.value = 0.18;
           this.reverbReturn.gain.value = 0.32;
+          this.delaySend.gain.value = 0;
+          this.delayReturn.gain.value = 0.42;
+          this.delayL.delayTime.value = 0.273;
+          this.delayR.delayTime.value = 0.411;
+          this.delayLP.type = "lowpass";
+          this.delayLP.frequency.value = 2800;
+          this.delayLP.Q.value = 0.5;
+          this.delayFB.gain.value = 0.32;
           this.highpass.type = "highpass";
           this.highpass.frequency.value = 75;
           this.highpass.Q.value = 0.5;
@@ -1927,10 +1947,33 @@
           this.pluckGain.connect(this.mixer);
           this.lfoGain.connect(this.pluckOsc.detune);
 
+          this.subOsc.type = "sine";
+          this.subOsc.frequency.value = 80;
+          this.subGain.gain.value = 0;
+          this.subOsc.connect(this.subGain);
+          this.lfoGain.connect(this.subOsc.detune);
+
           const waveforms = ["sine", "triangle", "sine", "triangle"];
           const detuneOffsets = [-7, 3, 5, -2];
           const staticPans = [0, 0.4, -0.4, 0];
           const supportsPan = typeof this.ctx.createStereoPanner === "function";
+
+          const subPan = supportsPan ? this.ctx.createStereoPanner() : null;
+          if (subPan) {
+            subPan.pan.value = 0;
+            this.subGain.connect(subPan);
+            subPan.connect(this.mixer);
+          } else {
+            this.subGain.connect(this.mixer);
+          }
+          this.subPanner = subPan;
+
+          this.delayPanL = supportsPan ? this.ctx.createStereoPanner() : null;
+          this.delayPanR = supportsPan ? this.ctx.createStereoPanner() : null;
+          if (this.delayPanL) {
+            this.delayPanL.pan.value = -0.9;
+            this.delayPanR.pan.value = 0.9;
+          }
           for (let i = 0; i < 4; i++) {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
@@ -1957,10 +2000,28 @@
           this.highpass.connect(this.filter);
           this.filter.connect(this.dryGain);
           this.filter.connect(this.reverbSend);
+          this.filter.connect(this.delaySend);
           this.dryGain.connect(this.master);
           this.reverbSend.connect(this.reverb);
           this.reverb.connect(this.reverbReturn);
           this.reverbReturn.connect(this.master);
+
+          this.delaySend.connect(this.delayL);
+          this.delayL.connect(this.delayR);
+          this.delayR.connect(this.delayLP);
+          this.delayLP.connect(this.delayFB);
+          this.delayFB.connect(this.delayL);
+          if (this.delayPanL) {
+            this.delayL.connect(this.delayPanL);
+            this.delayPanL.connect(this.delayReturn);
+            this.delayR.connect(this.delayPanR);
+            this.delayPanR.connect(this.delayReturn);
+          } else {
+            this.delayL.connect(this.delayReturn);
+            this.delayR.connect(this.delayReturn);
+          }
+          this.delayReturn.connect(this.master);
+
           this.master.connect(this.saturation);
           this.saturation.connect(this.compressor);
           this.compressor.connect(this.limiter);
@@ -2019,11 +2080,20 @@
           this.pluckGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
         }
 
+        applyDuck(amount) {
+          this.duckAmount = clamp(amount, 0, 0.9);
+          const effective = clamp(this.baseReverbReturn * (1 - this.duckAmount), 0, 0.65);
+          const now = this.ctx.currentTime;
+          this.reverbReturn.gain.cancelScheduledValues(now);
+          this.reverbReturn.gain.setTargetAtTime(effective, now, 0.045);
+        }
+
         async start() {
           if (!this.started) {
             this.oscs.forEach((osc) => osc.start());
             if (this.lfo) this.lfo.start();
             if (this.pluckOsc) this.pluckOsc.start();
+            if (this.subOsc) this.subOsc.start();
             this.started = true;
           }
           if (this.ctx.state === "suspended") {
@@ -2088,6 +2158,8 @@
           let reverbWet = 0.2;
           let reverbReturn = 0.3;
           let dryLevel = 0.86;
+          let delayWet = 0.14;
+          let subLevel = 0.28;
           let voice = ["sine", "triangle", "sine", "triangle"];
 
           if (mode === "smooth") {
@@ -2100,6 +2172,8 @@
             reverbWet = 0.2 + saturation * 0.08;
             reverbReturn = 0.28;
             dryLevel = 0.9;
+            delayWet = 0.12;
+            subLevel = 0.30;
           } else if (mode === "chord") {
             voice = ["triangle", "triangle", "sine", "triangle"];
             const root = quant(base);
@@ -2111,6 +2185,8 @@
             reverbWet = 0.34 + saturation * 0.12;
             reverbReturn = 0.4;
             dryLevel = 0.78;
+            delayWet = 0.14;
+            subLevel = 0.22;
           } else if (mode === "arpeggio") {
             voice = ["triangle", "square", "sine", "triangle"];
             const step = Math.floor(scanX / 5) % verticalBands;
@@ -2125,6 +2201,8 @@
             reverbWet = 0.18 + bandValue * 0.1;
             reverbReturn = 0.22;
             dryLevel = 0.92;
+            delayWet = 0.32;
+            subLevel = 0.18;
           } else if (mode === "ambient") {
             voice = ["sine", "triangle", "triangle", "sine"];
             const root = quant(lerp(90, 260, brightnessNorm(stats, controls.invert)));
@@ -2137,6 +2215,8 @@
             reverbWet = 0.58 + saturation * 0.14;
             reverbReturn = 0.58;
             dryLevel = 0.64;
+            delayWet = 0.08;
+            subLevel = 0.42;
           } else if (mode === "glitch") {
             voice = ["square", "triangle", "square", "sine"];
             const gateRate = edge > 0.45 ? 3 : 5;
@@ -2154,6 +2234,8 @@
             reverbWet = 0.08 + saturation * 0.08;
             reverbReturn = 0.12;
             dryLevel = 0.95;
+            delayWet = 0.22 * gate;
+            subLevel = 0.30;
           }
 
           this.setOscTypes(voice);
@@ -2166,7 +2248,22 @@
           this.ramp(this.filter.Q, clamp(q, 0.3, 7), smooth);
           this.ramp(this.dryGain.gain, clamp(dryLevel, 0.55, 1), smooth);
           this.ramp(this.reverbSend.gain, clamp(reverbWet, 0, 0.75), smooth);
-          this.ramp(this.reverbReturn.gain, clamp(reverbReturn, 0, 0.65), smooth);
+
+          this.baseReverbReturn = clamp(reverbReturn, 0, 0.65);
+          const duckedReturn = clamp(this.baseReverbReturn * (1 - (this.duckAmount || 0)), 0, 0.65);
+          this.ramp(this.reverbReturn.gain, duckedReturn, smooth);
+
+          this.ramp(this.delaySend.gain, clamp(delayWet, 0, 0.6), smooth);
+
+          if (this.subOsc) {
+            const subRef = Math.min(freqs[0], freqs[2], freqs[3]);
+            const subFreq = clamp(subRef * 0.5, 35, 200);
+            const darkness = 1 - clamp(stats.brightness / 255, 0, 1);
+            const subTarget = clamp(subLevel * (0.5 + darkness * 0.5), 0, 0.6);
+            this.ramp(this.subOsc.frequency, subFreq, smooth);
+            this.ramp(this.subGain.gain, subTarget, smooth);
+          }
+
           if (this.voicePanners[3]) this.ramp(this.voicePanners[3].pan, clamp(pan, -0.8, 0.8), smooth);
           this.setPlaying(state.isPlaying, controls, stats);
           return clamp(freqs[0], 60, 1200);
@@ -2436,6 +2533,7 @@
           peak = Math.max(peak, Math.abs(centered));
         }
         const rms = Math.sqrt(sum / data.length);
+        state.currentRms = rms;
         els.energyReadout.textContent = `amp ${rms.toFixed(2)}`;
 
         waveCtx.strokeStyle = "rgba(255,255,255,0.14)";
@@ -2599,6 +2697,15 @@
           resetMetrics();
         }
         drawWaveform();
+
+        if (state.audio && state.audio.started) {
+          const target = state.currentRms || 0;
+          state.envelope = (target > state.envelope)
+            ? lerp(state.envelope, target, 0.45)
+            : lerp(state.envelope, target, 0.12);
+          state.audio.applyDuck(clamp(state.envelope * 2.8, 0, 0.7));
+        }
+
         requestAnimationFrame(frame);
       }
 
