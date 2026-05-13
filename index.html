@@ -1146,15 +1146,15 @@
           <div class="field">
             <div class="field-head">
               <label>Scale &amp; key</label>
-              <span class="field-value" id="scaleKeyValue">C Dorian</span>
+              <span class="field-value" id="scaleKeyValue">C Pent. Minor</span>
             </div>
             <div class="scale-key-row">
               <select id="scaleSelect" aria-label="Scale">
+                <option value="pentMinor" selected>Pent. Minor</option>
+                <option value="pentMajor">Pent. Major</option>
                 <option value="dorian">Dorian</option>
                 <option value="major">Major</option>
                 <option value="minor">Minor</option>
-                <option value="pentMajor">Pent. Major</option>
-                <option value="pentMinor">Pent. Minor</option>
                 <option value="phrygian">Phrygian</option>
                 <option value="chromatic">Chromatic</option>
               </select>
@@ -1190,7 +1190,7 @@
             </label>
             <label class="switch" for="lockScaleToggle">
               <span>Lock to scale</span>
-              <input id="lockScaleToggle" type="checkbox">
+              <input id="lockScaleToggle" type="checkbox" checked>
             </label>
             <label class="switch" for="onsetsToggle">
               <span>Edge onsets</span>
@@ -1401,7 +1401,7 @@
         glitch: "Glitch Mode"
       };
       const presets = {
-        soft:      { label: "Soft Ambient",   mode: "ambient",  speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false, scale: "dorian",    root: 0, lockScale: false, onsets: false },
+        soft:      { label: "Soft Ambient",   mode: "ambient",  speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false, scale: "pentMinor", root: 0, lockScale: true,  onsets: false },
         cyber:     { label: "Cyber Scan",     mode: "smooth",   speed: 66, pitch: 78, volume: 42, smooth: 54, loop: true, invert: false, scale: "phrygian",  root: 9, lockScale: false, onsets: true  },
         choir:     { label: "Pixel Choir",    mode: "chord",    speed: 38, pitch: 64, volume: 36, smooth: 72, loop: true, invert: false, scale: "major",     root: 0, lockScale: false, onsets: false },
         rhythm:    { label: "Rhythmic Glitch", mode: "glitch",  speed: 84, pitch: 58, volume: 30, smooth: 32, loop: true, invert: false, scale: "pentMinor", root: 9, lockScale: false, onsets: true  },
@@ -1430,6 +1430,39 @@
       };
 
       const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+      function quantToMidi(freq, scaleIntervals, rootSemi) {
+        if (!(freq > 0)) return 60;
+        const midi = Math.round(12 * Math.log2(freq / 440) + 69);
+        const rel = midi - rootSemi;
+        const octave = Math.floor(rel / 12);
+        const inOctave = ((rel % 12) + 12) % 12;
+        let best = scaleIntervals[0];
+        let bestDist = Math.abs(inOctave - best);
+        for (let i = 1; i < scaleIntervals.length; i++) {
+          const d = Math.abs(inOctave - scaleIntervals[i]);
+          if (d < bestDist) { bestDist = d; best = scaleIntervals[i]; }
+        }
+        if (Math.abs(inOctave - 12) < bestDist) best = 12;
+        return octave * 12 + rootSemi + best;
+      }
+
+      function midiToHz(m) {
+        return 440 * Math.pow(2, (m - 69) / 12);
+      }
+
+      // Bass progression expressed as SCALE-DEGREE indices (0-based) into whichever scale
+      // the user has selected. Using degrees instead of fixed semitones means the
+      // progression always lives inside the chosen mode, so bass and melody can't clash.
+      // 1st - 5th - 3rd - 4th degree feels like a soft, modal-friendly loop.
+      const chordProgressionDegrees = [0, 4, 2, 3];
+
+      function progressionOffsetSemitones(scaleIntervals, degree) {
+        const len = scaleIntervals.length;
+        const oct = Math.floor(degree / len) * 12;
+        const idx = ((degree % len) + len) % len;
+        return scaleIntervals[idx] + oct;
+      }
 
       const state = {
         isPlaying: false,
@@ -1461,7 +1494,12 @@
         lastOnsetAt: 0,
         lastColumn: -1,
         currentRms: 0,
-        envelope: 0
+        envelope: 0,
+        nextStepAt: 0,
+        stepIndex: 0,
+        currentMidi: null,
+        chordRootMidi: null,
+        lastFiredStep: -8
       };
 
       function clamp(value, min, max) {
@@ -1912,8 +1950,10 @@
           this.reverbReturn.gain.value = 0.32;
           this.delaySend.gain.value = 0;
           this.delayReturn.gain.value = 0.42;
-          this.delayL.delayTime.value = 0.273;
-          this.delayR.delayTime.value = 0.411;
+          // Tempo-synced defaults at 110 BPM: dotted-1/8 left, 1/8 right.
+          // Updated each frame in update() from the current BPM derived from scan speed.
+          this.delayL.delayTime.value = 0.2045;
+          this.delayR.delayTime.value = 0.2727;
           this.delayLP.type = "lowpass";
           this.delayLP.frequency.value = 2800;
           this.delayLP.Q.value = 0.5;
@@ -1954,8 +1994,10 @@
           this.lfoGain.connect(this.subOsc.detune);
 
           const waveforms = ["sine", "triangle", "sine", "triangle"];
-          const detuneOffsets = [-7, 3, 5, -2];
-          const staticPans = [0, 0.4, -0.4, 0];
+          // Voice 0 is the lead — must be clean (no detune).
+          // Voices 1-3 are pad layers spread around it for width.
+          const detuneOffsets = [0, 7, -7, 12];
+          const staticPans = [0, 0.45, -0.45, 0.2];
           const supportsPan = typeof this.ctx.createStereoPanner === "function";
 
           const subPan = supportsPan ? this.ctx.createStereoPanner() : null;
@@ -2080,6 +2122,23 @@
           this.pluckGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
         }
 
+        // Step-sequencer pluck: sounds the actual scale-locked pitch (not an octave up),
+        // with a slower decay so it reads as a "note" rather than a click.
+        triggerNote(freq, velocity) {
+          if (!this.started || !this.pluckOsc) return;
+          const safe = clamp(freq, 80, 2400);
+          const now = this.ctx.currentTime;
+          const v = clamp(velocity, 0, 1);
+          const peak = clamp(0.18 + v * 0.34, 0.08, 0.58);
+          const decay = 0.32 + v * 0.18;
+          this.pluckOsc.frequency.cancelScheduledValues(now);
+          this.pluckOsc.frequency.setValueAtTime(safe, now);
+          this.pluckGain.gain.cancelScheduledValues(now);
+          this.pluckGain.gain.setValueAtTime(0, now);
+          this.pluckGain.gain.linearRampToValueAtTime(peak, now + 0.006);
+          this.pluckGain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+        }
+
         applyDuck(amount) {
           this.duckAmount = clamp(amount, 0, 0.9);
           const effective = clamp(this.baseReverbReturn * (1 - this.duckAmount), 0, 0.65);
@@ -2162,40 +2221,60 @@
           let subLevel = 0.28;
           let voice = ["sine", "triangle", "sine", "triangle"];
 
+          // Helper: nth degree of the scale relative to a midi root, wrapping into higher octaves.
+          const degHz = (rootMidi, degree) => {
+            const len = scaleIntervals.length;
+            const oct = Math.floor(degree / len) * 12;
+            const interval = scaleIntervals[((degree % len) + len) % len];
+            return midiToHz(rootMidi + interval + oct);
+          };
+
           if (mode === "smooth") {
             voice = ["sine", "sine", "triangle", "sine"];
-            const lead = controls.lockScale ? quant(base) : base;
+            const leadMidi = quantToMidi(base, scaleIntervals, rootSemi);
+            const lead = midiToHz(leadMidi);
             freqs = [lead, lead * (1.003 + r * 0.012), lead * 0.5, lead * 1.997];
-            gains = [0.72, 0.1 + r * 0.06, 0.08 * b, 0.025 * Math.max(contrast, edge)];
+            // Pad is backing — the step-sequencer pluck is the actual melody.
+            gains = [0.34, 0.08 + r * 0.05, 0.07 * b, 0.022 * Math.max(contrast, edge)];
             cutoff = lerp(620, 2400, Math.max(g, saturation * 0.36));
             q = lerp(0.35, 1.6, Math.max(contrast * 0.5, saturation * 0.25));
-            reverbWet = 0.2 + saturation * 0.08;
-            reverbReturn = 0.28;
+            reverbWet = 0.22 + saturation * 0.08;
+            reverbReturn = 0.30;
             dryLevel = 0.9;
-            delayWet = 0.12;
+            delayWet = 0.14;
             subLevel = 0.30;
           } else if (mode === "chord") {
             voice = ["triangle", "triangle", "sine", "triangle"];
-            const root = quant(base);
-            const major = stats.r >= stats.b;
-            freqs = [root, root * (major ? 1.25 : 1.2), root * (g > 0.48 ? 1.5 : 1.333), root * (1.875 + b * 0.22)];
-            gains = [0.38, 0.22 + r * 0.08, 0.2 + g * 0.08, 0.11 + b * 0.06 + saturation * 0.04];
+            const rootMidi = quantToMidi(base, scaleIntervals, rootSemi);
+            // Triad + 7th built from scale degrees so every voicing lives in the chosen mode.
+            freqs = [
+              degHz(rootMidi, 0),
+              degHz(rootMidi, 2),
+              degHz(rootMidi, 4),
+              degHz(rootMidi, 6)
+            ];
+            gains = [0.34, 0.22 + r * 0.08, 0.2 + g * 0.08, 0.11 + b * 0.06 + saturation * 0.04];
             cutoff = lerp(850, 3600, Math.max((r + g) * 0.5, saturation * 0.46));
             q = lerp(0.55, 2.2, Math.max(contrast * 0.7, edge * 0.45));
             reverbWet = 0.34 + saturation * 0.12;
             reverbReturn = 0.4;
             dryLevel = 0.78;
-            delayWet = 0.14;
+            delayWet = 0.16;
             subLevel = 0.22;
           } else if (mode === "arpeggio") {
             voice = ["triangle", "square", "sine", "triangle"];
             const step = Math.floor(scanX / 5) % verticalBands;
             const bandValue = stats.bands[step] / 255;
-            const scale = [1, 1.125, 1.25, 1.333, 1.5, 1.667, 1.875, 2];
-            const root = quant(lerp(130, 340, brightnessNorm(stats, controls.invert)));
-            freqs = [root * scale[step], root * scale[(step + 2) % scale.length], root * 0.5, root * 2];
+            const rootMidi = quantToMidi(lerp(130, 340, brightnessNorm(stats, controls.invert)), scaleIntervals, rootSemi);
+            // Step through scale degrees instead of a hard-coded just-intonation ladder.
+            freqs = [
+              degHz(rootMidi, step),
+              degHz(rootMidi, step + 2),
+              midiToHz(rootMidi - 12),
+              midiToHz(rootMidi + 12)
+            ];
             const pluck = (Math.floor(scanX / 4) % 2 === 0) ? 1 : 0.58;
-            gains = [(0.5 + bandValue * 0.22) * pluck, (0.07 + edge * 0.06) * pluck, 0.035, 0.045 * Math.max(contrast, saturation)];
+            gains = [(0.32 + bandValue * 0.18) * pluck, (0.07 + edge * 0.06) * pluck, 0.035, 0.045 * Math.max(contrast, saturation)];
             cutoff = lerp(760, 3900, Math.max(bandValue, saturation * 0.35));
             q = lerp(0.8, 3.0, Math.max(bandValue * 0.8, edge * 0.8));
             reverbWet = 0.18 + bandValue * 0.1;
@@ -2240,7 +2319,7 @@
 
           this.setOscTypes(voice);
           freqs.forEach((freq, i) => {
-            const safeFreq = clamp(freq, 60, 1200);
+            const safeFreq = clamp(freq, 55, 2400);
             this.ramp(this.oscs[i].frequency, safeFreq, smooth);
             this.ramp(this.gains[i].gain, clamp(gains[i], 0, 1), smooth * 0.85);
           });
@@ -2255,9 +2334,18 @@
 
           this.ramp(this.delaySend.gain, clamp(delayWet, 0, 0.6), smooth);
 
+          // Tempo-synced delay: dotted-1/8 left, 1/8 right based on current BPM.
+          const bpm = clamp(60 + (controls.speed - 10) * (140 / 110), 60, 200);
+          const beat = 60 / bpm;
+          this.ramp(this.delayL.delayTime, clamp(beat * 0.375, 0.05, 1.5), 0.08);
+          this.ramp(this.delayR.delayTime, clamp(beat * 0.5,   0.05, 1.5), 0.08);
+
           if (this.subOsc) {
-            const subRef = Math.min(freqs[0], freqs[2], freqs[3]);
-            const subFreq = clamp(subRef * 0.5, 35, 200);
+            // Sub follows the chord-progression root (one octave below) when the sequencer
+            // has decided on one, otherwise falls back to the lead's octave-down for legacy feel.
+            const subFreq = state.chordRootMidi != null
+              ? clamp(midiToHz(state.chordRootMidi - 12), 35, 200)
+              : clamp(Math.min(freqs[0], freqs[2], freqs[3]) * 0.5, 35, 200);
             const darkness = 1 - clamp(stats.brightness / 255, 0, 1);
             const subTarget = clamp(subLevel * (0.5 + darkness * 0.5), 0, 0.6);
             this.ramp(this.subOsc.frequency, subFreq, smooth);
@@ -2266,7 +2354,7 @@
 
           if (this.voicePanners[3]) this.ramp(this.voicePanners[3].pan, clamp(pan, -0.8, 0.8), smooth);
           this.setPlaying(state.isPlaying, controls, stats);
-          return clamp(freqs[0], 60, 1200);
+          return clamp(freqs[0], 55, 2400);
         }
 
         stopNow() {
@@ -2308,6 +2396,9 @@
           state.scanX = 0;
           state.lastStep = -1;
         }
+        // Anchor the next sequencer step to "right now" so the grid doesn't fire
+        // a stale burst from a long-paused state.
+        state.nextStepAt = 0;
 
         const audio = ensureAudio();
         if (audio) {
@@ -2336,6 +2427,11 @@
         state.lastEdge = 0;
         state.lastOnsetAt = 0;
         state.lastColumn = -1;
+        state.nextStepAt = 0;
+        state.stepIndex = 0;
+        state.currentMidi = null;
+        state.chordRootMidi = null;
+        state.lastFiredStep = -8;
         setPlayButtonText("Play");
         els.audioState.textContent = "IDLE";
         if (state.audio) state.audio.stopNow();
@@ -2677,12 +2773,57 @@
           } else {
             state.currentFrequency = frequencyFromStats(stats, controls);
           }
+
+          // Step sequencer: retrigger a clean pluck on a tempo grid so the listener
+          // hears discrete notes instead of a continuously-gliding pad.
+          if (state.isPlaying && state.audio && state.audio.started) {
+            const bpm = clamp(60 + (controls.speed - 10) * (140 / 110), 60, 200);
+            const stepMs = 60000 / bpm / 2; // 1/8 notes
+            if (!state.nextStepAt) state.nextStepAt = now;
+            const scaleIntervals = scales[controls.scale] || scales.dorian;
+            const rootSemi = ((controls.root | 0) % 12 + 12) % 12;
+
+            while (now >= state.nextStepAt) {
+              // Subtle swing on every off-beat 1/8 — keeps the grid from sounding mechanical.
+              const swing = (state.stepIndex % 2 === 1) ? 0.88 : 1.12;
+              state.nextStepAt += stepMs * swing;
+              state.stepIndex++;
+
+              // Advance the chord-root progression every 8 steps (~2 bars in 4/4).
+              if (state.chordRootMidi == null || state.stepIndex % 8 === 0) {
+                const progIdx = Math.floor(state.stepIndex / 8) % chordProgressionDegrees.length;
+                const degree = chordProgressionDegrees[progIdx];
+                state.chordRootMidi = 36 + rootSemi + progressionOffsetSemitones(scaleIntervals, degree);
+              }
+
+              // Lead pitch = quantized current-column brightness. Octave displacement on strong edges
+              // gives the line some melodic contour instead of slavishly tracing brightness.
+              let targetMidi = quantToMidi(frequencyFromStats(stats, controls), scaleIntervals, rootSemi);
+              if (stats.edge > 60 && (state.stepIndex % 3 === 0)) targetMidi += 12;
+              if (stats.brightness > 220 && (state.stepIndex % 4 === 0)) targetMidi += 12;
+
+              // Velocity from contrast + edge; quiet columns become rests for breathing room,
+              // but force-fire at least every 4 steps so we never fully stall out.
+              const velocity = clamp((stats.contrast / 90) * 0.6 + (stats.edge / 100) * 0.4, 0, 1);
+              const forceFire = (state.stepIndex - state.lastFiredStep) >= 4;
+              if (velocity > 0.12 || forceFire) {
+                state.audio.triggerNote(midiToHz(targetMidi), Math.max(velocity, forceFire ? 0.22 : 0));
+                state.currentMidi = targetMidi;
+                state.lastFiredStep = state.stepIndex;
+              }
+            }
+          }
+
           if (state.isPlaying && controls.onsets && state.audio && state.audio.started && col !== state.lastColumn) {
             const edgeDelta = stats.edge - state.lastEdge;
             const onsetGap = now - state.lastOnsetAt;
             if (edgeDelta > 18 && stats.edge > 28 && onsetGap > 38) {
               const intensity = clamp(edgeDelta / 70, 0, 1);
-              state.audio.triggerOnset(state.currentFrequency, intensity);
+              // Use the quantized current note when we have one, so accent stabs stay in key.
+              const accentHz = state.currentMidi != null
+                ? midiToHz(state.currentMidi)
+                : state.currentFrequency;
+              state.audio.triggerOnset(accentHz, intensity);
               state.lastOnsetAt = now;
             }
             state.lastEdge = stats.edge;
