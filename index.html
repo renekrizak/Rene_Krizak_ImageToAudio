@@ -1090,10 +1090,8 @@
             <div class="preset-grid" aria-label="Sound preset buttons">
               <button class="preset-btn active" type="button" data-preset="soft">Soft Ambient</button>
               <button class="preset-btn" type="button" data-preset="cyber">Cyber Scan</button>
-              <button class="preset-btn" type="button" data-preset="choir">Pixel Choir</button>
               <button class="preset-btn" type="button" data-preset="rhythm">Rhythmic Glitch</button>
               <button class="preset-btn" type="button" data-preset="musicbox">Music Box</button>
-              <button class="preset-btn" type="button" data-preset="sequencer">Sequencer</button>
             </div>
           </div>
 
@@ -1403,10 +1401,8 @@
       const presets = {
         soft:      { label: "Soft Ambient",   mode: "ambient",  speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false, scale: "pentMinor", root: 0, lockScale: true,  onsets: false },
         cyber:     { label: "Cyber Scan",     mode: "smooth",   speed: 66, pitch: 78, volume: 42, smooth: 54, loop: true, invert: false, scale: "phrygian",  root: 9, lockScale: false, onsets: true  },
-        choir:     { label: "Pixel Choir",    mode: "chord",    speed: 38, pitch: 64, volume: 36, smooth: 72, loop: true, invert: false, scale: "major",     root: 0, lockScale: false, onsets: false },
         rhythm:    { label: "Rhythmic Glitch", mode: "glitch",  speed: 84, pitch: 58, volume: 30, smooth: 32, loop: true, invert: false, scale: "pentMinor", root: 9, lockScale: false, onsets: true  },
-        musicbox:  { label: "Music Box",      mode: "smooth",   speed: 42, pitch: 60, volume: 42, smooth: 45, loop: true, invert: false, scale: "pentMinor", root: 2, lockScale: true,  onsets: true  },
-        sequencer: { label: "Sequencer",      mode: "arpeggio", speed: 72, pitch: 52, volume: 42, smooth: 22, loop: true, invert: false, scale: "pentMinor", root: 4, lockScale: true,  onsets: true  }
+        musicbox:  { label: "Music Box",      mode: "smooth",   speed: 42, pitch: 60, volume: 42, smooth: 45, loop: true, invert: false, scale: "pentMinor", root: 2, lockScale: true,  onsets: true  }
       };
 
       const scales = {
@@ -1879,6 +1875,25 @@
         return midiToHz(quantToMidi(freq, scaleIntervals, rootSemi));
       }
 
+      function nearestChordToneMidi(midi, rootMidi, scaleIntervals) {
+        if (rootMidi == null || !Number.isFinite(midi)) return midi;
+        const chordDegrees = [0, 2, 4, 6];
+        let best = midi;
+        let bestDist = Infinity;
+        for (let octave = -2; octave <= 4; octave++) {
+          for (let i = 0; i < chordDegrees.length; i++) {
+            const degree = chordDegrees[i];
+            const candidate = rootMidi + progressionOffsetSemitones(scaleIntervals, degree) + octave * 12;
+            const dist = Math.abs(candidate - midi);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = candidate;
+            }
+          }
+        }
+        return best;
+      }
+
       function enrichColumnStats(stats) {
         if (!stats || !stats.length) return stats;
         const ranges = {
@@ -2035,6 +2050,9 @@
           this.analyser = this.ctx.createAnalyser();
           this.recordDestination = this.ctx.createMediaStreamDestination();
           this.noteBus = this.ctx.createGain();
+          this.noteBody = this.ctx.createBiquadFilter();
+          this.noteWarmth = this.ctx.createBiquadFilter();
+          this.noteAir = this.ctx.createBiquadFilter();
           this.notePresence = this.ctx.createGain();
           this.edgeBus = this.ctx.createGain();
           this.edgeFilter = this.ctx.createBiquadFilter();
@@ -2063,16 +2081,17 @@
           this.gains = [];
           this.voicePanners = [];
           this.activePianoVoices = [];
+          this.pianoSamples = [];
           this.started = false;
           this.currentVoice = "";
           this.baseReverbReturn = 0.32;
           this.duckAmount = 0;
           this.master.gain.value = 0;
           this.mixer.gain.value = 1;
-          this.padBus.gain.value = 0.68;
+          this.padBus.gain.value = 0.52;
           this.noteBus.gain.value = 1.12;
           this.notePresence.gain.value = 0.24;
-          this.edgeBus.gain.value = 0.3;
+          this.edgeBus.gain.value = 0.16;
           this.dryGain.gain.value = 0.82;
           this.reverbSend.gain.value = 0.18;
           this.reverbReturn.gain.value = 0.22;
@@ -2083,9 +2102,9 @@
           this.delayL.delayTime.value = 0.2045;
           this.delayR.delayTime.value = 0.2727;
           this.delayLP.type = "lowpass";
-          this.delayLP.frequency.value = 2800;
-          this.delayLP.Q.value = 0.5;
-          this.delayFB.gain.value = 0.32;
+          this.delayLP.frequency.value = 2100;
+          this.delayLP.Q.value = 0.42;
+          this.delayFB.gain.value = 0.24;
           this.chorusSend.gain.value = 0.1;
           this.chorusL.delayTime.value = 0.018;
           this.chorusR.delayTime.value = 0.026;
@@ -2095,14 +2114,25 @@
           this.chorusDepthL.gain.value = 0.0035;
           this.chorusDepthR.gain.value = 0.0048;
           this.edgeFilter.type = "bandpass";
-          this.edgeFilter.frequency.value = 1800;
-          this.edgeFilter.Q.value = 1.8;
+          this.edgeFilter.frequency.value = 1400;
+          this.edgeFilter.Q.value = 1.15;
+          this.noteBody.type = "peaking";
+          this.noteBody.frequency.value = 260;
+          this.noteBody.Q.value = 0.62;
+          this.noteBody.gain.value = 3.2;
+          this.noteWarmth.type = "peaking";
+          this.noteWarmth.frequency.value = 710;
+          this.noteWarmth.Q.value = 0.7;
+          this.noteWarmth.gain.value = 1.4;
+          this.noteAir.type = "highshelf";
+          this.noteAir.frequency.value = 3900;
+          this.noteAir.gain.value = -1.5;
           this.highpass.type = "highpass";
           this.highpass.frequency.value = 75;
           this.highpass.Q.value = 0.5;
           this.filter.type = "lowpass";
           this.filter.frequency.value = 900;
-          this.filter.Q.value = 0.75;
+          this.filter.Q.value = 0.55;
           this.compressor.threshold.value = -12;
           this.compressor.knee.value = 10;
           this.compressor.ratio.value = 4;
@@ -2116,6 +2146,7 @@
           this.analyser.smoothingTimeConstant = 0.78;
           this.reverb.buffer = this.createImpulseResponse(2.9, 3.1);
           this.noiseBuffer = this.createNoiseBuffer(0.42);
+          this.createPianoSamples();
           this.lfo.type = "sine";
           this.lfo.frequency.value = 5.1;
           this.lfoGain.gain.value = 3;
@@ -2184,8 +2215,11 @@
 
           this.padBus.connect(this.mixer);
           this.padBus.connect(this.chorusSend);
-          this.noteBus.connect(this.mixer);
-          this.noteBus.connect(this.notePresence);
+          this.noteBus.connect(this.noteBody);
+          this.noteBody.connect(this.noteWarmth);
+          this.noteWarmth.connect(this.noteAir);
+          this.noteAir.connect(this.mixer);
+          this.noteAir.connect(this.notePresence);
           this.notePresence.connect(this.master);
           this.edgeFilter.connect(this.edgeBus);
           this.edgeBus.connect(this.mixer);
@@ -2295,6 +2329,90 @@
           return buffer;
         }
 
+        createPianoSamples() {
+          this.pianoSamples = [];
+          for (let midi = 36; midi <= 84; midi += 2) {
+            this.pianoSamples.push({
+              midi,
+              freq: midiToHz(midi),
+              buffer: this.createPianoSampleBuffer(midi)
+            });
+          }
+        }
+
+        createPianoSampleBuffer(midi) {
+          const sampleRate = this.ctx.sampleRate;
+          const freq = midiToHz(midi);
+          const lowKey = clamp((74 - midi) / 38, 0, 1);
+          const highKey = 1 - lowKey;
+          const duration = clamp(1.1 + lowKey * 1.8, 1.0, 3.0);
+          const length = Math.max(1, Math.floor(sampleRate * duration));
+          const buffer = this.ctx.createBuffer(2, length, sampleRate);
+          const left = buffer.getChannelData(0);
+          const right = buffer.getChannelData(1);
+          const ratios = [1, 2.006, 3.016, 4.034, 5.062, 6.098, 7.142, 8.195, 9.25, 10.32];
+          const levels = [1, 0.47, 0.25, 0.15, 0.09, 0.056, 0.035, 0.023, 0.014, 0.009];
+          const detunes = [0, -2.7, 2.4];
+          const phases = ratios.map(() => Math.random() * Math.PI * 2);
+          let max = 0;
+
+          for (let i = 0; i < length; i++) {
+            const t = i / sampleRate;
+            const strike = Math.exp(-t * (70 + highKey * 90));
+            const hammerNoise = (Math.random() * 2 - 1) * strike * (0.028 + highKey * 0.025);
+            let l = hammerNoise;
+            let r = hammerNoise * 0.82;
+
+            for (let p = 0; p < ratios.length; p++) {
+              const partialFreq = freq * ratios[p] * (1 + p * p * 0.00034);
+              if (partialFreq > sampleRate * 0.43) continue;
+              const partialDecay = (0.52 + lowKey * 1.55) / (1 + p * 0.2);
+              const attack = 1 - Math.exp(-t * (900 + p * 180));
+              const env = attack * Math.exp(-t / partialDecay);
+              const partialLevel = levels[p] * env * (1 + highKey * p * 0.025);
+              const strings = p < 3 ? detunes : [0];
+
+              for (let s = 0; s < strings.length; s++) {
+                const cents = strings[s] + (s - 1) * 0.18;
+                const hz = partialFreq * Math.pow(2, cents / 1200);
+                const value = Math.sin(t * hz * Math.PI * 2 + phases[p] + s * 0.43) * partialLevel * (s === 0 ? 1 : 0.24);
+                l += value * (s === 1 ? 0.72 : 1);
+                r += value * (s === 2 ? 0.72 : 1);
+              }
+            }
+
+            const body = Math.sin(t * Math.min(freq * 0.5, 180) * Math.PI * 2) * Math.exp(-t / (0.8 + lowKey)) * lowKey * 0.035;
+            l += body;
+            r += body * 0.94;
+            left[i] = l;
+            right[i] = r;
+            max = Math.max(max, Math.abs(l), Math.abs(r));
+          }
+
+          const normal = max > 0 ? 0.86 / max : 1;
+          for (let i = 0; i < length; i++) {
+            const fade = i > length - sampleRate * 0.08 ? (length - i) / (sampleRate * 0.08) : 1;
+            left[i] *= normal * fade;
+            right[i] *= normal * fade;
+          }
+          return buffer;
+        }
+
+        nearestPianoSample(midi) {
+          if (!this.pianoSamples.length) return null;
+          let best = this.pianoSamples[0];
+          let bestDist = Math.abs(midi - best.midi);
+          for (let i = 1; i < this.pianoSamples.length; i++) {
+            const sample = this.pianoSamples[i];
+            const dist = Math.abs(midi - sample.midi);
+            if (dist < bestDist) {
+              best = sample;
+              bestDist = dist;
+            }
+          }
+          return best;
+        }
+
         setOscTypes(types) {
           const key = types.join(",");
           if (this.currentVoice === key) return;
@@ -2308,7 +2426,7 @@
 
         triggerOnset(freq, intensity) {
           if (!this.started || !this.noiseBuffer) return;
-          const safe = clamp(freq * 1.35, 180, 5200);
+          const safe = clamp(freq * 1.04, 140, 3200);
           const now = this.ctx.currentTime;
           const v = clamp(intensity, 0, 1);
           const noise = this.ctx.createBufferSource();
@@ -2319,18 +2437,18 @@
           noise.buffer = this.noiseBuffer;
           tone.type = "triangle";
           tone.frequency.setValueAtTime(safe, now);
-          tone.frequency.exponentialRampToValueAtTime(clamp(safe * 0.62, 120, 3600), now + 0.08);
+          tone.frequency.exponentialRampToValueAtTime(clamp(safe * 0.78, 120, 3200), now + 0.11);
 
           this.edgeFilter.frequency.cancelScheduledValues(now);
-          this.edgeFilter.frequency.setTargetAtTime(clamp(safe * (1.2 + v), 600, 6400), now, 0.02);
-          this.edgeFilter.Q.setTargetAtTime(lerp(1.1, 4.2, v), now, 0.025);
+          this.edgeFilter.frequency.setTargetAtTime(clamp(safe * (0.82 + v * 0.48), 360, 3200), now, 0.045);
+          this.edgeFilter.Q.setTargetAtTime(lerp(0.45, 1.35, v), now, 0.055);
 
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.linearRampToValueAtTime(clamp(0.06 + v * 0.26, 0.04, 0.34), now + 0.004);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075 + v * 0.06);
+          gain.gain.linearRampToValueAtTime(clamp(0.014 + v * 0.07, 0.01, 0.095), now + 0.014);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18 + v * 0.12);
           toneGain.gain.setValueAtTime(0.0001, now);
-          toneGain.gain.linearRampToValueAtTime(clamp(0.025 + v * 0.12, 0.02, 0.16), now + 0.006);
-          toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+          toneGain.gain.linearRampToValueAtTime(clamp(0.01 + v * 0.045, 0.008, 0.06), now + 0.018);
+          toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
 
           noise.connect(gain);
           gain.connect(this.edgeFilter);
@@ -2338,8 +2456,8 @@
           toneGain.connect(this.edgeFilter);
           noise.start(now);
           tone.start(now);
-          noise.stop(now + 0.2);
-          tone.stop(now + 0.18);
+          noise.stop(now + 0.34);
+          tone.stop(now + 0.3);
           noise.onended = () => {
             noise.disconnect();
             gain.disconnect();
@@ -2356,12 +2474,9 @@
           const stopAt = when + 0.08;
           voice.output.gain.cancelScheduledValues(when);
           voice.output.gain.setTargetAtTime(0.0001, when, 0.018);
-          voice.oscillators.forEach((osc) => {
-            try { osc.stop(stopAt); } catch (error) {}
+          voice.sources.forEach((source) => {
+            try { source.stop(stopAt); } catch (error) {}
           });
-          if (voice.hammer) {
-            try { voice.hammer.stop(Math.min(stopAt, when + 0.03)); } catch (error) {}
-          }
         }
 
         cleanupPianoVoice(voice) {
@@ -2383,40 +2498,37 @@
           const midi = 69 + 12 * Math.log2(safe / 440);
           const lowKey = clamp((74 - midi) / 38, 0, 1);
           const highKey = 1 - lowKey;
-          const duration = clamp(0.55 + lowKey * 1.15 + v * 0.38, 0.48, 2.15);
-          const baseAmp = clamp(0.032 + v * 0.105, 0.028, 0.14);
+          const sample = this.nearestPianoSample(midi);
+          if (!sample) return;
+          const duration = sample.buffer.duration / clamp(safe / sample.freq, 0.55, 1.9);
+          const source = this.ctx.createBufferSource();
           const output = this.ctx.createGain();
-          const wood = this.ctx.createBiquadFilter();
           const toneFilter = this.ctx.createBiquadFilter();
           const air = this.ctx.createBiquadFilter();
           const supportsPan = typeof this.ctx.createStereoPanner === "function";
           const pan = supportsPan ? this.ctx.createStereoPanner() : null;
           const voice = {
             output,
-            hammer: null,
-            oscillators: [],
-            nodes: [output, wood, toneFilter, air],
+            sources: [source],
+            nodes: [source, output, toneFilter, air],
             stopping: false,
             cleaned: false
           };
 
+          source.buffer = sample.buffer;
+          source.playbackRate.value = clamp(safe / sample.freq, 0.55, 1.9);
           output.gain.setValueAtTime(0.0001, now);
-          output.gain.linearRampToValueAtTime(1, now + 0.004);
-          output.gain.setTargetAtTime(0.0001, now + duration, 0.12);
-
-          wood.type = "peaking";
-          wood.frequency.value = clamp(170 + lowKey * 130 + safe * 0.12, 150, 520);
-          wood.Q.value = 0.72;
-          wood.gain.value = lerp(1.5, 4.5, lowKey);
+          output.gain.linearRampToValueAtTime(clamp(0.11 + v * 0.38, 0.09, 0.52), now + 0.004);
+          output.gain.setTargetAtTime(0.0001, now + duration * 0.78, 0.16 + lowKey * 0.08);
           toneFilter.type = "lowpass";
-          toneFilter.frequency.value = clamp(2600 + v * 4200 + highKey * 1200, 2200, 7600);
-          toneFilter.Q.value = lerp(0.42, 0.9, v);
+          toneFilter.frequency.value = clamp(2100 + v * 4300 + highKey * 1400, 1900, 8200);
+          toneFilter.Q.value = lerp(0.36, 0.82, v);
           air.type = "highshelf";
           air.frequency.value = 3600;
-          air.gain.value = lerp(-4, 2.4, v);
+          air.gain.value = lerp(-5.5, 1.8, v);
 
-          output.connect(wood);
-          wood.connect(toneFilter);
+          source.connect(output);
+          output.connect(toneFilter);
           toneFilter.connect(air);
           if (pan) {
             pan.pan.value = clamp((Math.random() - 0.5) * 0.32 + (midi - 60) * 0.006, -0.35, 0.35);
@@ -2427,75 +2539,16 @@
             air.connect(this.noteBus);
           }
 
-          const ratios = [1, 2.006, 3.016, 4.034, 5.062, 6.098, 7.142, 8.195];
-          const levels = [1, 0.46, 0.25, 0.145, 0.088, 0.055, 0.034, 0.022];
-          const detuneCents = [0, -2.4, 2.1];
-          let cleanupOsc = null;
-          let cleanupAt = 0;
-
-          ratios.forEach((ratio, index) => {
-            const partialFreq = safe * ratio * (1 + index * index * 0.00032);
-            if (partialFreq > 10400) return;
-            const partialDecay = clamp(duration * (1.05 - index * 0.085) + lowKey * 0.08, 0.16, duration + 0.18);
-            const brightLift = lerp(0.72, 1.42, v);
-            const partialLevel = baseAmp * levels[index] * Math.pow(brightLift, index * 0.22);
-            const strings = index < 3 ? detuneCents : [0];
-            strings.forEach((detune, stringIndex) => {
-              const osc = this.ctx.createOscillator();
-              const gain = this.ctx.createGain();
-              const stringScale = stringIndex === 0 ? 1 : 0.24;
-              osc.type = "sine";
-              osc.frequency.setValueAtTime(partialFreq, now);
-              osc.detune.setValueAtTime(detune + (Math.random() - 0.5) * 0.7, now);
-              gain.gain.setValueAtTime(0.0001, now);
-              gain.gain.linearRampToValueAtTime(partialLevel * stringScale, now + 0.003 + index * 0.0007);
-              gain.gain.exponentialRampToValueAtTime(0.0001, now + partialDecay);
-              osc.connect(gain);
-              gain.connect(output);
-              osc.start(now);
-              const stopAt = now + partialDecay + 0.08;
-              osc.stop(stopAt);
-              voice.oscillators.push(osc);
-              voice.nodes.push(osc, gain);
-              if (stopAt > cleanupAt) {
-                cleanupAt = stopAt;
-                cleanupOsc = osc;
-              }
-            });
-          });
-
-          if (this.noiseBuffer) {
-            const hammer = this.ctx.createBufferSource();
-            const hammerFilter = this.ctx.createBiquadFilter();
-            const hammerGain = this.ctx.createGain();
-            hammer.buffer = this.noiseBuffer;
-            hammerFilter.type = "bandpass";
-            hammerFilter.frequency.value = clamp(1150 + safe * 1.7 + v * 2700, 900, 7200);
-            hammerFilter.Q.value = lerp(0.9, 2.6, v);
-            hammerGain.gain.setValueAtTime(0.0001, now);
-            hammerGain.gain.linearRampToValueAtTime(clamp(0.018 + v * 0.075 + highKey * 0.02, 0.015, 0.11), now + 0.002);
-            hammerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.032 + highKey * 0.02);
-            hammer.connect(hammerFilter);
-            hammerFilter.connect(hammerGain);
-            hammerGain.connect(output);
-            hammer.start(now, Math.random() * 0.2);
-            hammer.stop(now + 0.08);
-            voice.hammer = hammer;
-            voice.nodes.push(hammer, hammerFilter, hammerGain);
-          }
-
           this.activePianoVoices.push(voice);
           while (this.activePianoVoices.length > 24) {
             const oldest = this.activePianoVoices.shift();
             this.stopPianoVoice(oldest, now);
           }
 
-          if (cleanupOsc) {
-            cleanupOsc.onended = () => {
-              this.cleanupPianoVoice(voice);
-            };
-          } else {
-            window.setTimeout(() => this.cleanupPianoVoice(voice), Math.ceil((duration + 0.18) * 1000));
+          source.start(now);
+          source.stop(now + duration + 0.04);
+          source.onended = () => {
+            this.cleanupPianoVoice(voice);
           };
         }
 
@@ -2569,6 +2622,7 @@
           let chorusWet = 0.1;
           let chorusReturn = 0.18;
           let voice = ["sine", "triangle", "sine", "triangle"];
+          const backingLevel = 0.64;
 
           // Helper: nth degree of the scale relative to a midi root, wrapping into higher octaves.
           const degHz = (rootMidi, degree) => {
@@ -2582,7 +2636,7 @@
             voice = ["sine", "sine", "triangle", "sine"];
             const lead = chooseScaleFrequency(base * (1 + (centroidNorm - 0.5) * 0.08), controls, scaleIntervals, rootSemi);
             freqs = [lead, lead * (1.003 + r * 0.012), lead * 0.5, lead * (1.997 + motion * 0.015)];
-            // Pad is backing — the step-sequencer pluck is the actual melody.
+            // Pad is backing; the piano pulse carries the melodic focus.
             gains = [0.30 + motion * 0.05, 0.07 + r * 0.05, 0.055 * b, 0.02 * Math.max(contrast, edge)];
             cutoff = lerp(620, 2600, Math.max(g, saturation * 0.36, motion * 0.42));
             q = lerp(0.35, 1.6, Math.max(contrast * 0.5, saturation * 0.25));
@@ -2688,10 +2742,10 @@
           freqs.forEach((freq, i) => {
             const safeFreq = clamp(freq, 55, 2400);
             this.ramp(this.oscs[i].frequency, safeFreq, smooth);
-            this.ramp(this.gains[i].gain, clamp(gains[i], 0, 1), smooth * 0.85);
+            this.ramp(this.gains[i].gain, clamp(gains[i] * backingLevel, 0, 1), smooth * 0.85);
           });
-          this.ramp(this.filter.frequency, clamp(cutoff, 180, 5200), smooth);
-          this.ramp(this.filter.Q, clamp(q, 0.3, 7), smooth);
+          this.ramp(this.filter.frequency, clamp(cutoff, 160, 3600), smooth);
+          this.ramp(this.filter.Q, clamp(q * 0.72, 0.25, 3.4), smooth);
           this.ramp(this.dryGain.gain, clamp(dryLevel, 0.55, 1), smooth);
           this.ramp(this.reverbSend.gain, clamp(reverbWet * 0.7, 0, 0.52), smooth);
 
@@ -2699,7 +2753,7 @@
           const duckedReturn = clamp(this.baseReverbReturn * (1 - (this.duckAmount || 0)), 0, 0.65);
           this.ramp(this.reverbReturn.gain, duckedReturn, smooth);
 
-          this.ramp(this.delaySend.gain, clamp(delayWet * 0.64, 0, 0.38), smooth);
+          this.ramp(this.delaySend.gain, clamp(delayWet * 0.48, 0, 0.26), smooth);
           this.ramp(this.chorusSend.gain, clamp(chorusWet * 0.58, 0, 0.2), smooth);
           this.ramp(this.chorusReturn.gain, clamp(chorusReturn * 0.58, 0, 0.22), smooth);
 
@@ -2710,13 +2764,13 @@
           this.ramp(this.delayR.delayTime, clamp(beat * 0.5,   0.05, 1.5), 0.08);
 
           if (this.subOsc) {
-            // Sub follows the chord-progression root (one octave below) when the sequencer
+            // Sub follows the chord-progression root (one octave below) when the pulse
             // has decided on one, otherwise falls back to the lead's octave-down for legacy feel.
             const subFreq = state.chordRootMidi != null
               ? clamp(midiToHz(state.chordRootMidi - 12), 35, 200)
               : clamp(Math.min(freqs[0], freqs[2], freqs[3]) * 0.5, 35, 200);
             const darkness = 1 - clamp(stats.brightnessMapped != null ? stats.brightnessMapped : stats.brightness / 255, 0, 1);
-            const subTarget = clamp(subLevel * 0.66 * (0.5 + darkness * 0.5), 0, 0.4);
+            const subTarget = clamp(subLevel * 0.42 * (0.5 + darkness * 0.5), 0, 0.24);
             this.ramp(this.subOsc.frequency, subFreq, smooth);
             this.ramp(this.subGain.gain, subTarget, smooth);
           }
@@ -2765,7 +2819,7 @@
           state.scanX = 0;
           state.lastStep = -1;
         }
-        // Anchor the next sequencer step to "right now" so the grid doesn't fire
+        // Anchor the next musical pulse to "right now" so the grid doesn't fire
         // a stale burst from a long-paused state.
         state.nextStepAt = 0;
 
@@ -3145,19 +3199,29 @@
             state.currentFrequency = frequencyFromStats(stats, controls);
           }
 
-          // Step sequencer: retrigger a clean pluck on a tempo grid so the listener
-          // hears discrete notes instead of a continuously-gliding pad.
+          // Musical pulse: retrigger piano notes from the scan, with image-driven rests
+          // and small timing shifts so it breathes more like a performed line.
           if (state.isPlaying && state.audio && state.audio.started) {
             const bpm = clamp(60 + (controls.speed - 10) * (140 / 110), 60, 200);
-            const stepMs = 60000 / bpm / 2; // 1/8 notes
+            const stepMs = 60000 / bpm / 2;
             if (!state.nextStepAt) state.nextStepAt = now;
             const scaleIntervals = scales[controls.scale] || scales.dorian;
             const rootSemi = ((controls.root | 0) % 12 + 12) % 12;
 
             while (now >= state.nextStepAt) {
-              // Subtle swing on every off-beat 1/8 — keeps the grid from sounding mechanical.
-              const swing = (state.stepIndex % 2 === 1) ? 0.88 : 1.12;
-              state.nextStepAt += stepMs * swing;
+              const centroid = clamp((stats.bandCentroid || 0) / Math.max(1, verticalBands - 1), 0, 1);
+              const peakDegree = stats.peakBand || 0;
+              const motion = clamp(stats.energyMapped != null ? stats.energyMapped : (stats.energyDelta || 0) / 72, 0, 1);
+              const edgeIntensity = clamp(stats.edgeMapped != null ? stats.edgeMapped : stats.edge / 110, 0, 1);
+              const contrastMapped = clamp(stats.contrastMapped != null ? stats.contrastMapped : stats.contrast / 90, 0, 1);
+              const activity = clamp(motion * 0.4 + edgeIntensity * 0.32 + contrastMapped * 0.28, 0, 1);
+              const offBeat = state.stepIndex % 2 === 1;
+              const phraseStep = state.stepIndex % 16;
+              const swing = offBeat ? lerp(0.94, 0.84, activity) : lerp(1.06, 1.15, activity);
+              const longStep = activity < 0.34 && (phraseStep === 5 || phraseStep === 13) ? 1.55 : 1;
+              const jitterSeed = Math.sin((state.stepIndex + 1) * 12.9898 + col * 0.037) * 43758.5453;
+              const humanize = (jitterSeed - Math.floor(jitterSeed) - 0.5) * lerp(7, 24, activity);
+              state.nextStepAt += Math.max(55, stepMs * swing * longStep + humanize);
               state.stepIndex++;
 
               // Advance the chord-root progression every 8 steps (~2 bars in 4/4).
@@ -3169,10 +3233,6 @@
 
               // Lead pitch = quantized current-column brightness. Octave displacement on strong edges
               // gives the line some melodic contour instead of slavishly tracing brightness.
-              const centroid = clamp((stats.bandCentroid || 0) / Math.max(1, verticalBands - 1), 0, 1);
-              const peakDegree = stats.peakBand || 0;
-              const motion = clamp(stats.energyMapped != null ? stats.energyMapped : (stats.energyDelta || 0) / 72, 0, 1);
-              const edgeIntensity = clamp(stats.edgeMapped != null ? stats.edgeMapped : stats.edge / 110, 0, 1);
               const melodicLift = 1 + (centroid - 0.5) * 0.16 + motion * 0.05;
               let targetMidi = null;
               let targetHz = frequencyFromStats(stats, controls) * melodicLift;
@@ -3182,8 +3242,13 @@
                   targetMidi += progressionOffsetSemitones(scaleIntervals, peakDegree) % 12;
                 }
                 targetMidi = quantToMidi(midiToHz(targetMidi), scaleIntervals, rootSemi);
+                const chordTone = nearestChordToneMidi(targetMidi, state.chordRootMidi, scaleIntervals);
+                const chordPull = (phraseStep === 0 || phraseStep === 8) ? 1 : lerp(0.35, 0.72, 1 - edgeIntensity);
+                targetMidi = Math.round(lerp(targetMidi, chordTone, chordPull));
+                targetMidi = quantToMidi(midiToHz(targetMidi), scaleIntervals, rootSemi);
                 if (edgeIntensity > 0.52 && (state.stepIndex % 3 === 0)) targetMidi += 12;
                 if (brightnessNorm(stats, controls.invert) > 0.86 && (state.stepIndex % 4 === 0)) targetMidi += 12;
+                targetMidi = clamp(targetMidi, 43, 88);
                 targetHz = midiToHz(targetMidi);
               } else {
                 targetHz *= 1 + clamp(stats.colorMapped != null ? stats.colorMapped * 0.22 : (stats.colorDelta || 0) / 420, 0, 0.22);
@@ -3191,17 +3256,21 @@
 
               // Velocity from contrast + edge; quiet columns become rests for breathing room,
               // but force-fire at least every 4 steps so we never fully stall out.
-              const velocity = clamp((stats.contrastMapped != null ? stats.contrastMapped : stats.contrast / 90) * 0.48 + edgeIntensity * 0.34 + motion * 0.34, 0, 1);
-              const forceFire = (state.stepIndex - state.lastFiredStep) >= 4;
-              if (velocity > 0.12 || forceFire) {
+              const velocity = clamp(contrastMapped * 0.45 + edgeIntensity * 0.28 + motion * 0.32, 0, 1);
+              const restSeed = Math.sin((state.stepIndex + 3) * 78.233 + col * 0.019) * 43758.5453;
+              const restRoll = restSeed - Math.floor(restSeed);
+              const phraseAnchor = phraseStep === 0 || phraseStep === 8;
+              const forceFire = (state.stepIndex - state.lastFiredStep) >= 5;
+              const restChance = phraseAnchor ? 0 : lerp(0.34, 0.08, activity);
+              if ((velocity > 0.14 && restRoll > restChance) || forceFire || phraseAnchor) {
                 state.audio.triggerNote(targetHz, Math.max(velocity, forceFire ? 0.22 : 0));
                 state.currentMidi = targetMidi;
                 state.currentNoteHz = targetHz;
                 state.lastFiredStep = state.stepIndex;
               }
 
-              if ((edgeIntensity > 0.38 || motion > 0.5) && (state.stepIndex - state.lastPercStep) >= 2) {
-                state.audio.triggerOnset(targetHz, clamp(edgeIntensity * 0.55 + motion * 0.6, 0, 1));
+              if ((edgeIntensity > 0.46 || motion > 0.58) && (state.stepIndex - state.lastPercStep) >= 3) {
+                state.audio.triggerOnset(targetHz, clamp(edgeIntensity * 0.45 + motion * 0.42, 0, 1));
                 state.lastPercStep = state.stepIndex;
               }
             }
