@@ -1090,7 +1090,7 @@
             <div class="preset-grid" aria-label="Sound preset buttons">
               <button class="preset-btn active" type="button" data-preset="soft">Soft Ambient</button>
               <button class="preset-btn" type="button" data-preset="cyber">Cyber Scan</button>
-              <button class="preset-btn" type="button" data-preset="rhythm">Rhythmic Glitch</button>
+              <button class="preset-btn" type="button" data-preset="piano">Piano</button>
               <button class="preset-btn" type="button" data-preset="musicbox">Music Box</button>
             </div>
           </div>
@@ -1137,7 +1137,7 @@
               <option value="chord">Chord Scan</option>
               <option value="arpeggio">Arpeggio</option>
               <option value="ambient">Ambient Drone</option>
-              <option value="glitch">Glitch Mode</option>
+              <option value="piano">Piano</option>
             </select>
           </div>
 
@@ -1396,12 +1396,12 @@
         chord: "Chord Scan",
         arpeggio: "Arpeggio",
         ambient: "Ambient Drone",
-        glitch: "Glitch Mode"
+        piano: "Piano"
       };
       const presets = {
         soft:      { label: "Soft Ambient",   mode: "ambient",  speed: 30, pitch: 48, volume: 34, smooth: 82, loop: true, invert: false, scale: "pentMinor", root: 0, lockScale: true,  onsets: false },
         cyber:     { label: "Cyber Scan",     mode: "smooth",   speed: 66, pitch: 78, volume: 42, smooth: 54, loop: true, invert: false, scale: "phrygian",  root: 9, lockScale: false, onsets: true  },
-        rhythm:    { label: "Rhythmic Glitch", mode: "glitch",  speed: 84, pitch: 58, volume: 30, smooth: 32, loop: true, invert: false, scale: "pentMinor", root: 9, lockScale: false, onsets: true  },
+        piano:     { label: "Piano",          mode: "piano",    speed: 46, pitch: 58, volume: 46, smooth: 70, loop: true, invert: false, scale: "pentMinor", root: 2, lockScale: true,  onsets: false },
         musicbox:  { label: "Music Box",      mode: "smooth",   speed: 42, pitch: 60, volume: 42, smooth: 45, loop: true, invert: false, scale: "pentMinor", root: 2, lockScale: true,  onsets: true  }
       };
 
@@ -2082,6 +2082,8 @@
           this.voicePanners = [];
           this.activePianoVoices = [];
           this.pianoSamples = [];
+          this.pianoSampleQueue = [];
+          this.pianoWarmupStarted = false;
           this.started = false;
           this.currentVoice = "";
           this.baseReverbReturn = 0.32;
@@ -2146,7 +2148,6 @@
           this.analyser.smoothingTimeConstant = 0.78;
           this.reverb.buffer = this.createImpulseResponse(2.9, 3.1);
           this.noiseBuffer = this.createNoiseBuffer(0.42);
-          this.createPianoSamples();
           this.lfo.type = "sine";
           this.lfo.frequency.value = 5.1;
           this.lfoGain.gain.value = 3;
@@ -2331,12 +2332,52 @@
 
         createPianoSamples() {
           this.pianoSamples = [];
-          for (let midi = 36; midi <= 84; midi += 2) {
+          for (let midi = 36; midi <= 84; midi += 3) {
             this.pianoSamples.push({
               midi,
               freq: midiToHz(midi),
               buffer: this.createPianoSampleBuffer(midi)
             });
+          }
+        }
+
+        warmPianoSamples() {
+          if (this.pianoWarmupStarted) return;
+          this.pianoWarmupStarted = true;
+          this.pianoSampleQueue = [];
+          for (let midi = 36; midi <= 84; midi += 3) {
+            this.pianoSampleQueue.push(midi);
+          }
+
+          const buildNext = (deadline) => {
+            const hasIdleTime = () => !deadline || deadline.timeRemaining() > 8;
+            while (this.pianoSampleQueue.length && hasIdleTime()) {
+              const midi = this.pianoSampleQueue.shift();
+              this.pianoSamples.push({
+                midi,
+                freq: midiToHz(midi),
+                buffer: this.createPianoSampleBuffer(midi)
+              });
+            }
+            this.pianoSamples.sort((a, b) => a.midi - b.midi);
+            if (this.pianoSampleQueue.length) {
+              this.schedulePianoWarmup(buildNext);
+            }
+          };
+
+          this.schedulePianoWarmup(buildNext);
+        }
+
+        schedulePianoWarmup(callback) {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(callback, { timeout: 180 });
+          } else {
+            window.setTimeout(() => {
+              const start = performance.now();
+              callback({
+                timeRemaining: () => Math.max(0, 10 - (performance.now() - start))
+              });
+            }, 16);
           }
         }
 
@@ -2489,6 +2530,55 @@
           if (index >= 0) this.activePianoVoices.splice(index, 1);
         }
 
+        triggerFallbackNote(freq, velocity) {
+          const safe = clamp(freq, 55, 2200);
+          const now = this.ctx.currentTime;
+          const v = clamp(velocity, 0, 1);
+          const output = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+          const osc = this.ctx.createOscillator();
+          const upper = this.ctx.createOscillator();
+          const upperGain = this.ctx.createGain();
+          const supportsPan = typeof this.ctx.createStereoPanner === "function";
+          const pan = supportsPan ? this.ctx.createStereoPanner() : null;
+          const duration = clamp(0.38 + (1 - safe / 2200) * 0.52 + v * 0.18, 0.32, 1.05);
+
+          osc.type = "triangle";
+          upper.type = "sine";
+          osc.frequency.setValueAtTime(safe, now);
+          upper.frequency.setValueAtTime(clamp(safe * 2.006, 120, 5600), now);
+          upperGain.gain.value = 0.16 + v * 0.08;
+          output.gain.setValueAtTime(0.0001, now);
+          output.gain.linearRampToValueAtTime(clamp(0.055 + v * 0.16, 0.04, 0.22), now + 0.006);
+          output.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+          filter.type = "lowpass";
+          filter.frequency.value = clamp(1700 + v * 2600, 1400, 5200);
+          filter.Q.value = 0.45;
+
+          osc.connect(output);
+          upper.connect(upperGain);
+          upperGain.connect(output);
+          output.connect(filter);
+          if (pan) {
+            pan.pan.value = clamp((Math.random() - 0.5) * 0.24, -0.2, 0.2);
+            filter.connect(pan);
+            pan.connect(this.noteBus);
+          } else {
+            filter.connect(this.noteBus);
+          }
+
+          osc.start(now);
+          upper.start(now);
+          osc.stop(now + duration + 0.05);
+          upper.stop(now + duration + 0.05);
+          osc.onended = () => {
+            [osc, upper, upperGain, output, filter, pan].forEach((node) => {
+              if (!node) return;
+              try { node.disconnect(); } catch (error) {}
+            });
+          };
+        }
+
         // Procedural piano: hammer noise, inharmonic string partials, and a small body filter.
         triggerNote(freq, velocity) {
           if (!this.started || !this.noteBus) return;
@@ -2499,7 +2589,10 @@
           const lowKey = clamp((74 - midi) / 38, 0, 1);
           const highKey = 1 - lowKey;
           const sample = this.nearestPianoSample(midi);
-          if (!sample) return;
+          if (!sample) {
+            this.triggerFallbackNote(safe, v);
+            return;
+          }
           const duration = sample.buffer.duration / clamp(safe / sample.freq, 0.55, 1.9);
           const source = this.ctx.createBufferSource();
           const output = this.ctx.createGain();
@@ -2572,6 +2665,7 @@
           if (this.ctx.state === "suspended") {
             await this.ctx.resume();
           }
+          this.warmPianoSamples();
         }
 
         ramp(param, value, seconds) {
@@ -2622,7 +2716,7 @@
           let chorusWet = 0.1;
           let chorusReturn = 0.18;
           let voice = ["sine", "triangle", "sine", "triangle"];
-          const backingLevel = 0.64;
+          let backingLevel = 0.64;
 
           // Helper: nth degree of the scale relative to a midi root, wrapping into higher octaves.
           const degHz = (rootMidi, degree) => {
@@ -2632,7 +2726,22 @@
             return midiToHz(rootMidi + interval + oct);
           };
 
-          if (mode === "smooth") {
+          if (mode === "piano") {
+            voice = ["sine", "sine", "sine", "sine"];
+            const lead = chooseScaleFrequency(base * (1 + (centroidNorm - 0.5) * 0.05), controls, scaleIntervals, rootSemi);
+            freqs = [lead, lead * 0.5, lead * 1.997, lead * 1.5];
+            gains = [0.055, 0.018, 0.012, 0.008];
+            cutoff = lerp(360, 1150, Math.max(g * 0.55, saturation * 0.22));
+            q = 0.35;
+            reverbWet = 0.06;
+            reverbReturn = 0.08;
+            dryLevel = 0.68;
+            delayWet = 0.015;
+            subLevel = 0.025;
+            chorusWet = 0.015;
+            chorusReturn = 0.025;
+            backingLevel = 0.18;
+          } else if (mode === "smooth") {
             voice = ["sine", "sine", "triangle", "sine"];
             const lead = chooseScaleFrequency(base * (1 + (centroidNorm - 0.5) * 0.08), controls, scaleIntervals, rootSemi);
             freqs = [lead, lead * (1.003 + r * 0.012), lead * 0.5, lead * (1.997 + motion * 0.015)];
@@ -2715,27 +2824,6 @@
             subLevel = 0.42;
             chorusWet = 0.18 + saturation * 0.12;
             chorusReturn = 0.28;
-          } else if (mode === "glitch") {
-            voice = ["square", "triangle", "square", "sine"];
-            const gateRate = edge + motion > 0.65 ? 3 : 5;
-            const gate = (Math.floor(scanX / gateRate) % 2 === 0) ? 1 : 0.3 + saturation * 0.12;
-            const root = chooseScaleFrequency(base * (1 + colorMotion * 0.08), controls, scaleIntervals, rootSemi);
-            freqs = [root, root * (1.5 + r * 0.08), root * (2 + motion * 0.05), root * 0.5];
-            gains = [
-              (0.18 + contrast * 0.22 + edge * 0.13) * gate,
-              (0.055 + r * 0.1) * gate,
-              (0.025 + b * 0.065 + saturation * 0.03) * gate,
-              0.02
-            ];
-            cutoff = lerp(620, 4300, Math.max(g, contrast * 0.7, edge * 0.82));
-            q = lerp(0.5, 4.2, Math.max(contrast, edge));
-            reverbWet = 0.08 + saturation * 0.08;
-            reverbReturn = 0.12;
-            dryLevel = 0.95;
-            delayWet = 0.22 * gate;
-            subLevel = 0.30;
-            chorusWet = 0.03 + colorMotion * 0.05;
-            chorusReturn = 0.08;
           }
 
           this.setOscTypes(voice);
@@ -3269,14 +3357,14 @@
                 state.lastFiredStep = state.stepIndex;
               }
 
-              if ((edgeIntensity > 0.46 || motion > 0.58) && (state.stepIndex - state.lastPercStep) >= 3) {
+              if (controls.mode !== "piano" && (edgeIntensity > 0.46 || motion > 0.58) && (state.stepIndex - state.lastPercStep) >= 3) {
                 state.audio.triggerOnset(targetHz, clamp(edgeIntensity * 0.45 + motion * 0.42, 0, 1));
                 state.lastPercStep = state.stepIndex;
               }
             }
           }
 
-          if (state.isPlaying && controls.onsets && state.audio && state.audio.started && col !== state.lastColumn) {
+          if (state.isPlaying && controls.mode !== "piano" && controls.onsets && state.audio && state.audio.started && col !== state.lastColumn) {
             const edgeDelta = stats.edge - state.lastEdge;
             const onsetGap = now - state.lastOnsetAt;
             if (edgeDelta > 18 && stats.edge > 28 && onsetGap > 38) {
@@ -3477,11 +3565,8 @@
       }
 
       function clearDrawing() {
-        if (!state.originalImageBackup) return;
-        sourceCtx.putImageData(state.originalImageBackup, 0, 0);
-        state.imageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
-        state.columnStats = precomputeColumnStats(state.imageData, sourceCanvas.width, sourceCanvas.height);
-        drawPreview();
+        createSampleImage();
+        showError("");
       }
 
       function toggleDrawMode() {
